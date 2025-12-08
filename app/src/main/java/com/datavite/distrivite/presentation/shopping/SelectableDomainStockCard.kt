@@ -27,9 +27,6 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.domain.model.DomainStock
-import com.datavite.distrivite.presentation.shopping.EditablePriceSelector
-import com.datavite.distrivite.presentation.shopping.EditableQuantitySelector
-import com.datavite.distrivite.presentation.shopping.SelectedDomainStock
 
 // ==========================================================================
 // STOCK TAG (color-coded chip)
