@@ -27,10 +27,42 @@ import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.domain.model.DomainStock
+import com.datavite.distrivite.presentation.shopping.EditablePriceSelector
+import com.datavite.distrivite.presentation.shopping.EditableQuantitySelector
+import com.datavite.distrivite.presentation.shopping.SelectedDomainStock
 
-// ================================
+// ==========================================================================
+// STOCK TAG (color-coded chip)
+// ==========================================================================
+@Composable
+private fun StockTag(quantity: Int) {
+    val (bg, fg) = when {
+        quantity <= 0 ->
+            MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        quantity in 1..5 ->
+            MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        else ->
+            MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+    }
+
+    Row(
+        modifier = Modifier
+            .background(bg, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$quantity",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = fg
+        )
+    }
+}
+
+// ==========================================================================
 // SELECTABLE STOCK CARD
-// ================================
+// ==========================================================================
 @Composable
 fun SelectableDomainStockCard(
     domainStock: DomainStock,
@@ -46,10 +78,9 @@ fun SelectableDomainStockCard(
     val price = selectedStock?.price ?: domainStock.billingPrice
     val isLocked = selectedStock?.isPriceLocked ?: true
 
-    val borderColor = if (isSelected)
-        MaterialTheme.colorScheme.primary
-    else
-        MaterialTheme.colorScheme.outlineVariant
+    val borderColor =
+        if (isSelected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.outlineVariant
 
     Card(
         onClick = onToggle,
@@ -58,10 +89,9 @@ fun SelectableDomainStockCard(
             .padding(vertical = 4.dp)
             .animateContentSize(),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surface
+            containerColor =
+                if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surface
         ),
         border = BorderStroke(1.dp, borderColor),
         shape = RoundedCornerShape(16.dp),
@@ -75,7 +105,9 @@ fun SelectableDomainStockCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Product image
+                // ==========================================================
+                // PRODUCT IMAGE
+                // ==========================================================
                 Image(
                     painter = rememberAsyncImagePainter(
                         ImageRequest.Builder(LocalContext.current)
@@ -92,7 +124,9 @@ fun SelectableDomainStockCard(
                     contentScale = ContentScale.Crop
                 )
 
-                // Product info + actions
+                // ==========================================================
+                // PRODUCT INFORMATION + INTERACTIVE FEATURES
+                // ==========================================================
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -105,12 +139,31 @@ fun SelectableDomainStockCard(
                         fontWeight = FontWeight.Medium
                     )
 
+                    // ==========================================================
+                    // STOCK TAG (color-coded)
+                    // ==========================================================
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Stock :",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        StockTag(domainStock.quantity)
+                    }
+
+                    // ==========================================================
+                    // SELECTED → DISPLAY QUANTITY + PRICE EDITORS
+                    // ==========================================================
                     if (isSelected) {
                         EditablePriceSelector(
-                            price = price.toInt(),          // Show rounded FCFA amount
+                            price = price.toInt(),
                             isLocked = isLocked,
-                            onPriceChange = { intValue ->
-                                onPriceChange(intValue.toDouble())   // Store as Double if your system requires it
+                            onPriceChange = {
+                                onPriceChange(it.toDouble())
                             },
                             onLockToggle = onLockToggle,
                             authOrgUser = authOrgUser
@@ -121,6 +174,9 @@ fun SelectableDomainStockCard(
                             onQuantityChange = onQuantityChange
                         )
                     } else {
+                        // ======================================================
+                        // NON-SELECTED → SHOW PRICE ONLY
+                        // ======================================================
                         Text(
                             text = "${domainStock.billingPrice} FCFA",
                             style = MaterialTheme.typography.bodyMedium,
@@ -130,7 +186,5 @@ fun SelectableDomainStockCard(
                 }
             }
         }
-        }
+    }
 }
-
-
