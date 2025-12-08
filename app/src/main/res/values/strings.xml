@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Distrivite</string>
+    <string name="loading_failed">Failed to load</string>
+    <string name="org_empty">You don\'t have any schools</string>
+    <string name="org_registration_request">Request for registration</string>
+    <string name="retry">Retry</string>
+    <string name="loading">Loading</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="geofence_not_available">Geofencing is not available.</string>
+    <string name="geofence_too_many_geofences">You have added too many geofences.</string>
+    <string name="geofence_too_many_pending_intents">Too many pending intents have been added.</string>
+    <string name="unknown_geofence_error">Unknown geofence error occurred.</string>
+</resources>
