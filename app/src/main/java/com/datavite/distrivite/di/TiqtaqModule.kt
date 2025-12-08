@@ -94,6 +94,7 @@ import com.datavite.distrivite.data.notification.TextToSpeechNotifier
 import com.datavite.distrivite.data.notification.services.NotificationApiGateway
 import com.datavite.distrivite.data.notification.services.ParentNotificationService
 import com.datavite.distrivite.data.notification.services.ParentNotificationServiceImpl
+import com.datavite.distrivite.data.remote.clients.PrivateRetrofitClient
 import com.datavite.distrivite.data.remote.clients.PublicRetrofitClient
 import com.datavite.distrivite.data.remote.datasource.BillingRemoteDataSource
 import com.datavite.distrivite.data.remote.datasource.BillingRemoteDataSourceImpl
@@ -1074,8 +1075,8 @@ object TiqtaqModule {
 
     @Provides
     @Singleton
-    fun provideRemoteStockService(publicRetrofitClient: PublicRetrofitClient): RemoteStockService {
-        return publicRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
+    fun provideRemoteStockService(privateRetrofitClient: PrivateRetrofitClient): RemoteStockService {
+        return privateRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
             .create(RemoteStockService::class.java)
     }
 
@@ -1149,8 +1150,8 @@ object TiqtaqModule {
 
     @Provides
     @Singleton
-    fun provideRemoteBillingService(publicRetrofitClient: PublicRetrofitClient): RemoteBillingService {
-        return publicRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
+    fun provideRemoteBillingService(privateRetrofitClient: PrivateRetrofitClient): RemoteBillingService {
+        return privateRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
             .create(RemoteBillingService::class.java)
     }
 
@@ -1250,8 +1251,8 @@ object TiqtaqModule {
 
     @Provides
     @Singleton
-    fun provideRemoteTransactionService(publicRetrofitClient: PublicRetrofitClient): RemoteTransactionService {
-        return publicRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
+    fun provideRemoteTransactionService(privateRetrofitClient: PrivateRetrofitClient): RemoteTransactionService {
+        return privateRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
             .create(RemoteTransactionService::class.java)
     }
 
@@ -1322,8 +1323,8 @@ object TiqtaqModule {
 
     @Provides
     @Singleton
-    fun provideRemoteCustomerService(publicRetrofitClient: PublicRetrofitClient): RemoteCustomerService {
-        return publicRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
+    fun provideRemoteCustomerService(privateRetrofitClient: PrivateRetrofitClient): RemoteCustomerService {
+        return privateRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
             .create(RemoteCustomerService::class.java)
     }
 
