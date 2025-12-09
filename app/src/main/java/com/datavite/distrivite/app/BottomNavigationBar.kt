@@ -45,7 +45,7 @@ enum class BottomNavigationBarItem(
         hasNews = true
     ),
     Transaction(direction = TransactionScreenDestination,
-        title = "TX",
+        title = "TXT",
         selectedIcon = Icons.Filled.AttachMoney,
         unselectedIcon = Icons.Outlined.AttachMoney,
         hasNews = true

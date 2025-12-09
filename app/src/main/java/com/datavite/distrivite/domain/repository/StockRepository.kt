@@ -9,6 +9,8 @@ interface StockRepository {
     suspend fun getDomainStocksFor(searchQuery:String, filterOption: FilterOption): List<DomainStock>
     suspend fun getDomainStocksForFilterOption(filterOption: FilterOption): List<DomainStock>
     suspend fun getDomainStockById(domainStockId:String): DomainStock?
+    suspend fun  updateStockQuantity(domainStock: DomainStock, newQuantity:Int)
+    suspend fun updateStock(domainStock: DomainStock)
     suspend fun createStock(domainStock: DomainStock)
     suspend fun deleteStock(domainStock: DomainStock)
     suspend fun fetchIfEmpty(organization: String)

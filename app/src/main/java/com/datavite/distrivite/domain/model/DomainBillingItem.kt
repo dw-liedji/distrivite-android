@@ -9,6 +9,7 @@ data class DomainBillingItem(
     val orgSlug: String,
     val orgId: String,
     val orgUserId: String,
+    val isDelivered: Boolean,
     val billingId: String,
     val stockId: String,
     val stockName: String,

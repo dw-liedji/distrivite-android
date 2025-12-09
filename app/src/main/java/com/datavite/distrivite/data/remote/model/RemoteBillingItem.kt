@@ -12,6 +12,7 @@ data class RemoteBillingItem(
     @SerialName("organization_user_id") val orgUserId: String,
     @SerialName("stock_name") val stockName: String,
     @SerialName("stock_id") val stockId: String,
+    @SerialName("is_delivered") val isDelivered: Boolean,
     @SerialName("facturation_id") val billingId: String,
     @SerialName("quantity") val quantity: Int,
     @SerialName("unit_price") val unitPrice: Double,

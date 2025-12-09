@@ -41,6 +41,25 @@ class StockRepositoryImpl @Inject constructor(
         return domainStock?.let { stockMapper.mapLocalToDomain(domainStock) }
     }
 
+    override suspend fun updateStockQuantity(
+        domainStock: DomainStock,
+        newQuantity: Int
+    ) {
+        val newDomainStock = domainStock.copy(
+            modified = LocalDateTime.now().toString(),
+            quantity = newQuantity
+        )
+
+        val local = stockMapper.mapDomainToLocal(newDomainStock)
+
+        try {
+            localDataSource.insertLocalStock(local)
+            notificationBus.emit(NotificationEvent.Success("Stock updated successfully"))
+        }catch (e: SQLiteConstraintException) {
+            notificationBus.emit(NotificationEvent.Failure("Stock failed to update"))
+        }
+    }
+
     override suspend fun createStock(domainStock: DomainStock) {
 
         val pendingDomainStock = domainStock.copy(
@@ -70,7 +89,7 @@ class StockRepositoryImpl @Inject constructor(
 
     }
 
-    private suspend fun updateStock(domainStock: DomainStock) {
+    override suspend fun updateStock(domainStock: DomainStock) {
         val pendingDomainStock = domainStock.copy(syncStatus = SyncStatus.PENDING)
         val local = stockMapper.mapDomainToLocal(pendingDomainStock)
         val remote = stockMapper.mapDomainToRemote(pendingDomainStock)

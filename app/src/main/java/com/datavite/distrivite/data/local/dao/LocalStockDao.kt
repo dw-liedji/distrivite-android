@@ -38,6 +38,9 @@ interface LocalStockDao {
     @Query("SELECT DISTINCT categoryName FROM localstocks ORDER BY categoryName")
     fun getLocalStockCategories(): Flow<List<String>>
 
+    @Query("SELECT * FROM localStocks WHERE id = :localStockId LIMIT 1")
+    fun getLocalStockById(localStockId: String): LocalStock?
+
     @Query("SELECT * FROM localStocks ORDER BY expirationDate DESC")
     fun getAllLocalStocks(): List<LocalStock>
 

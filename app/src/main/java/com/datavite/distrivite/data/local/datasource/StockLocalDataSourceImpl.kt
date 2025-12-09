@@ -30,7 +30,7 @@ class StockLocalDataSourceImpl @Inject constructor (
     }
 
     override suspend fun getLocalStockById(localStockId: String): LocalStock? {
-        TODO("Not yet implemented")
+        return localStockDao.getLocalStockById(localStockId)
     }
 
     override suspend fun insertLocalStock(localStock: LocalStock) {

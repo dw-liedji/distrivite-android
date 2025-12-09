@@ -3,6 +3,7 @@ package com.datavite.distrivite.data.local.datasource
 import FilterOption
 import com.datavite.distrivite.data.local.model.LocalStock
 import com.datavite.distrivite.data.local.model.SyncStatus
+import com.datavite.distrivite.domain.model.DomainStock
 import kotlinx.coroutines.flow.Flow
 
 interface StockLocalDataSource {
