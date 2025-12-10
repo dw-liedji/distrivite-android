@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
 import javax.inject.Inject
+import kotlin.collections.map
 
 class BillingRepositoryImpl @Inject constructor(
     private val localDataSource: BillingLocalDataSource,
@@ -120,7 +121,11 @@ class BillingRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deliverBilling(domainBilling: DomainBilling) {
-        val pendingDomainBilling = domainBilling.copy(
+
+        val updatedItems = domainBilling.items.map { item -> item.copy(isDelivered = true) }
+        val updatedBilling = domainBilling.copy(isDelivered = true, items = updatedItems)
+
+        val pendingDomainBilling = updatedBilling.copy(
             modified = LocalDateTime.now().toString(),
             syncStatus = SyncStatus.PENDING,
         )

@@ -462,11 +462,13 @@ class ShoppingViewModel @Inject constructor(
 
                         billingRepository.createBilling(newBilling)
 
-                        if (_shoppingUiState.value.isDelivered)
-                        for (selectedStock in _shoppingUiState.value.selectedStocks) {
-                            val newStockQuantity = selectedStock.domainStock.quantity - selectedStock.quantity
-                            stockRepository.updateStockQuantity(selectedStock.domainStock, newStockQuantity)
+                        if (_shoppingUiState.value.isDelivered) {
+                            for (selectedStock in _shoppingUiState.value.selectedStocks) {
+                                val newStockQuantity = selectedStock.domainStock.quantity - selectedStock.quantity
+                                stockRepository.updateStockQuantity(selectedStock.domainStock, newStockQuantity)
+                            }
                         }
+
 
                         // Reset state after successful order
                         _shoppingUiState.update {

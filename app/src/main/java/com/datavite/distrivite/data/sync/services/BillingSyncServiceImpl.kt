@@ -67,7 +67,7 @@ class BillingSyncServiceImpl @Inject constructor(
 
     private suspend fun pushDeliveredBilling(remoteBilling: RemoteBilling) {
         try {
-            remoteDataSource.updateRemoteBilling(remoteBilling.orgSlug, remoteBilling)
+            remoteDataSource.deliverRemoteBilling(remoteBilling.orgSlug, remoteBilling)
             val updatedDomain = billingMapper.mapRemoteToDomain(remoteBilling)
             val entities = billingMapper.mapDomainToLocalBillingWithItemsAndPaymentsRelation(updatedDomain)
 

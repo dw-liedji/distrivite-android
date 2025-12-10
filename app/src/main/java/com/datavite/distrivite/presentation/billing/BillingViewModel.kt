@@ -15,6 +15,7 @@ import com.datavite.distrivite.domain.model.DomainTransaction
 import com.datavite.distrivite.domain.notification.NotificationBus
 import com.datavite.distrivite.domain.notification.NotificationEvent
 import com.datavite.distrivite.domain.repository.BillingRepository
+import com.datavite.distrivite.domain.repository.StockRepository
 import com.datavite.distrivite.domain.repository.TransactionRepository
 import com.datavite.distrivite.utils.TransactionBroker
 import com.datavite.distrivite.utils.TransactionType
@@ -36,6 +37,7 @@ class BillingViewModel @Inject constructor(
     private val authOrgUserCredentialManager: AuthOrgUserCredentialManager,
     private val billingRepository: BillingRepository,
     private val transactionRepository: TransactionRepository,
+    private val stockRepository: StockRepository,
     private val syncOrchestrator: SyncOrchestrator,
     private val notificationBus: NotificationBus,
     private val textToSpeechNotifier: TextToSpeechNotifier,
@@ -207,10 +209,12 @@ class BillingViewModel @Inject constructor(
         val selectedBilling = _billingUiState.value.selectedBilling ?: return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val updatedBilling = selectedBilling.copy(isDelivered = true)
-
-                billingRepository.deliverBilling(updatedBilling)
-                _billingUiState.update { it.copy(selectedBilling = updatedBilling) }
+                billingRepository.deliverBilling(selectedBilling)
+                for(item in selectedBilling.items){
+                    val domainStock = stockRepository.getDomainStockById(item.stockId)
+                    domainStock?.let { stockRepository.updateStockQuantity(it, it.quantity- item.quantity) }
+                }
+                //_billingUiState.update { it.copy(selectedBilling = updatedBilling) }
                 showInfoMessage("Order delivered successfully")
 
                 // Sync with server
