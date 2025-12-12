@@ -57,12 +57,14 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.domain.model.DomainCustomer
 import com.datavite.distrivite.utils.TransactionBroker
 
 @Composable
 fun CustomerAndPaymentStep(
     shoppingUiState: ShoppingUiState,
+    authOrgUser: AuthOrgUser?,
     onBack: () -> Unit,
     onCustomerSelect: (DomainCustomer) -> Unit,
     onClearSelection: () -> Unit,
@@ -146,12 +148,12 @@ fun CustomerAndPaymentStep(
                         onPaymentBrokerChange = onPaymentBrokerChange,
                         isPaymentValid = shoppingUiState.isPaymentValid
                     )
-
-                    // NEW: Delivery Check Section
-                    DeliveryCheckSection(
-                        isDelivered = shoppingUiState.isDelivered,
-                        onDeliverChange = onDeliverChange
-                    )
+                    authOrgUser?.let {
+                        if(it.isManager || it.isAdmin) DeliveryCheckSection(
+                            isDelivered = shoppingUiState.isDelivered,
+                            onDeliverChange = onDeliverChange
+                        )
+                    }
                 }
                 else -> {
                     CustomerSelectionSection(

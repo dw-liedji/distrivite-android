@@ -171,6 +171,7 @@ fun ShoppingScreen(
                     CheckoutStep.CUSTOMER_INFO -> {
                         CustomerAndPaymentStep(
                             shoppingUiState = shoppingUiState,
+                            authOrgUser = authOrgUser,
                             onBack = { viewModel.backToReviewItems() },
                             onCustomerSelect = { viewModel.selectCustomer(it) },
                             onClearSelection = {viewModel.clearCustomerSelection()},

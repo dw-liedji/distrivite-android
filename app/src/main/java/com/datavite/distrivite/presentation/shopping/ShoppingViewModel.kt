@@ -469,7 +469,6 @@ class ShoppingViewModel @Inject constructor(
                             }
                         }
 
-
                         // Reset state after successful order
                         _shoppingUiState.update {
                             it.copy(

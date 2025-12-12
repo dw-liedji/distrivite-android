@@ -54,7 +54,7 @@ class StockRepositoryImpl @Inject constructor(
 
         try {
             localDataSource.insertLocalStock(local)
-            notificationBus.emit(NotificationEvent.Success("Stock updated successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Stock updated successfully"))
         }catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Stock failed to update"))
         }

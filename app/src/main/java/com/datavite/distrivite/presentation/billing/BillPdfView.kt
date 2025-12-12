@@ -34,8 +34,8 @@ fun rememberBillPdfView(
             .zIndex(-1f) // Keep behind everything else
     ) { composeView ->
         composeView.setContent {
-            //BillReceiptComposableWithHeader(billing = billing)
-            BillReceiptComposableWithHeaderISSI(billing = billing)
+            BillReceiptComposableWithHeader(billing = billing)
+            //BillReceiptComposableWithHeaderISSI(billing = billing)
             //BillReceiptComposableTest()
         }
     }
