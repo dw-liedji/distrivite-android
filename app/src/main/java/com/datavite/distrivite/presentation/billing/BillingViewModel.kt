@@ -10,6 +10,7 @@ import com.datavite.distrivite.data.notification.TextToSpeechNotifier
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.data.sync.SyncOrchestrator
 import com.datavite.distrivite.domain.model.DomainBilling
+import com.datavite.distrivite.domain.model.DomainBillingItem
 import com.datavite.distrivite.domain.model.DomainBillingPayment
 import com.datavite.distrivite.domain.model.DomainTransaction
 import com.datavite.distrivite.domain.notification.NotificationBus
@@ -183,6 +184,119 @@ class BillingViewModel @Inject constructor(
         }
     }
 
+    // Functions
+    fun showEditItemDialog(item: DomainBillingItem) {
+        _billingUiState.update { it.copy(selectedItemToEdit = item) }
+    }
+
+    fun showEditPaymentDialog(payment: DomainBillingPayment) {
+        _billingUiState.update { it.copy(selectedPaymentToEdit = payment) }
+    }
+
+    // --- CREATE Item ---
+    fun addItem(newItem: DomainBillingItem) {
+        val selectedBilling = _billingUiState.value.selectedBilling ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val updatedBilling = selectedBilling.copy(
+                    items = selectedBilling.items + newItem
+                )
+
+                billingRepository.updateBilling(updatedBilling)
+                _billingUiState.update { it.copy(selectedBilling = updatedBilling) }
+                showInfoMessage("Item added successfully")
+
+                // Sync with server
+                authOrgUser.value?.orgSlug?.let { syncOrchestrator.push(it) }
+
+            } catch (e: Exception) {
+                showErrorMessage("Failed to add item: ${e.message}")
+            }
+        }
+    }
+
+    fun onUpdateItem(updatedItem: DomainBillingItem) {
+        val selectedBilling = _billingUiState.value.selectedBilling ?: return
+
+        val oldItem = selectedBilling.items.firstOrNull { it.id == updatedItem.id }
+            ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val oldQty = oldItem.quantity
+                val newQty = updatedItem.quantity
+                val delta = newQty - oldQty
+
+                // Update stock only if quantity changed
+                if (delta != 0) {
+                    val domainStock = stockRepository.getDomainStockById(updatedItem.stockId)
+                    if (domainStock != null) {
+                        stockRepository.updateStockQuantity(domainStock, -delta)
+                    }
+                }
+
+                val updatedBilling = selectedBilling.copy(
+                    items = selectedBilling.items.map { item ->
+                        if (item.id == updatedItem.id) updatedItem else item
+                    }
+                )
+
+                billingRepository.updateBilling(updatedBilling)
+
+                _billingUiState.update {
+                    it.copy(selectedBilling = updatedBilling)
+                }
+
+                dismissItemDialog()
+                showInfoMessage("Item updated successfully")
+
+                authOrgUser.value?.orgSlug?.let {
+                    syncOrchestrator.push(it)
+                }
+
+            } catch (e: Exception) {
+                showErrorMessage("Failed to update item: ${e.message}")
+            }
+        }
+    }
+
+    fun dismissItemDialog() {
+        // Update item logic
+        _billingUiState.update { it.copy(selectedItemToEdit = null) }
+    }
+
+    fun dismissPaymentDialog() {
+        // Update item logic
+        _billingUiState.update { it.copy(selectedPaymentToEdit = null) }
+    }
+
+    fun onUpdatePayment(updatedPayment: DomainBillingPayment) {
+        val selectedBilling = _billingUiState.value.selectedBilling ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val updatedBilling = selectedBilling.copy(
+                    payments = selectedBilling.payments.map { payment ->
+                        if (payment.id == updatedPayment.id) updatedPayment else payment
+                    }
+                )
+
+                billingRepository.updateBilling(updatedBilling)
+                _billingUiState.update { it.copy(selectedBilling = updatedBilling) }
+                dismissPaymentDialog()
+                showInfoMessage("Payment updated successfully")
+
+
+                // Sync with server
+                authOrgUser.value?.orgSlug?.let { syncOrchestrator.push(it) }
+
+            } catch (e: Exception) {
+                showErrorMessage("Failed to update payment: ${e.message}")
+            }
+        }
+    }
+
     fun deletePayment(domainBillingPayment: DomainBillingPayment) {
         val selectedBilling = _billingUiState.value.selectedBilling ?: return
 
@@ -212,7 +326,7 @@ class BillingViewModel @Inject constructor(
                 billingRepository.deliverBilling(selectedBilling)
                 for(item in selectedBilling.items){
                     val domainStock = stockRepository.getDomainStockById(item.stockId)
-                    domainStock?.let { stockRepository.updateStockQuantity(it, it.quantity- item.quantity) }
+                    domainStock?.let { stockRepository.updateStockQuantity(it, - item.quantity) }
                 }
                 //_billingUiState.update { it.copy(selectedBilling = updatedBilling) }
                 showInfoMessage("Order delivered successfully")

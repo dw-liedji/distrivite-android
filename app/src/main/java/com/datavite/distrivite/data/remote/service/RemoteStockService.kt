@@ -39,6 +39,14 @@ interface RemoteStockService {
         @Body session: RemoteStock
     ): RemoteStock
 
+    @PUT("en/{organization}/api/v1/data/stocks/{id}/edit-quantity/")
+    suspend fun updateRemoteStockQuantity(
+        @Path("organization") organization: String,
+        @Path("id") id: String,
+        @Body session: RemoteStock
+    ): RemoteStock
+
+
     @DELETE("en/{organization}/api/v1/data/stocks/{id}/delete/")
     suspend fun deleteRemoteStock(
         @Path("organization") organization: String,

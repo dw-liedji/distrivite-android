@@ -30,7 +30,7 @@ android {
         val production = "\"https://distrivite-b3825671fa5a.herokuapp.com/\""
         val development = "\"http://192.168.43.107:8001/\""
 
-        val currentEnv = production
+        val currentEnv = development
 
         getByName("debug") {
             buildConfigField(
@@ -153,13 +153,13 @@ dependencies {
     // DocumentFile and ExitInterface
     implementation("androidx.exifinterface:exifinterface:1.4.1")
 
-    // TensorFlow Lite dependencies
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-task-vision:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu-api:2.11.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    // TensorFlow Lite RT dependencies (all version must be the same to work)
+    implementation("com.google.ai.edge.litert:litert:1.4.1")
+    implementation("com.google.ai.edge.litert:litert-support:1.4.1")
+    implementation("com.google.ai.edge.litert:litert-metadata:1.4.1")
+    implementation("com.google.ai.edge.litert:litert-api:1.4.1")
+    implementation("com.google.ai.edge.litert:litert-gpu:1.4.1")
+    implementation("com.google.ai.edge.litert:litert-gpu-api:1.4.1")
 
     // Gps Location dependency
     implementation("com.google.android.gms:play-services-location:21.3.0")

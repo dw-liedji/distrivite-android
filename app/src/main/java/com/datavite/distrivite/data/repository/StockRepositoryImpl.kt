@@ -11,6 +11,7 @@ import com.datavite.distrivite.data.local.model.SyncStatus
 import com.datavite.distrivite.data.mapper.StockMapper
 import com.datavite.distrivite.data.remote.datasource.StockRemoteDataSource
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.domain.model.DomainStock
 import com.datavite.distrivite.domain.notification.NotificationBus
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
 import javax.inject.Inject
+import kotlin.math.abs
 
 class StockRepositoryImpl @Inject constructor(
     private val localDataSource: StockLocalDataSource,
@@ -43,18 +45,36 @@ class StockRepositoryImpl @Inject constructor(
 
     override suspend fun updateStockQuantity(
         domainStock: DomainStock,
-        newQuantity: Int
+        quantityDelta: Int
     ) {
-        val newDomainStock = domainStock.copy(
-            modified = LocalDateTime.now().toString(),
-            quantity = newQuantity
+        if (quantityDelta == 0) return
+
+        val pendingDomainStock = domainStock.copy(
+            syncStatus = SyncStatus.PENDING
         )
 
-        val local = stockMapper.mapDomainToLocal(newDomainStock)
+        val local = stockMapper.mapDomainToLocal(
+            pendingDomainStock.copy(quantity = domainStock.quantity + quantityDelta)
+        )
+
+        val remote = stockMapper.mapDomainToRemote(
+            pendingDomainStock.copy(quantity = quantityDelta)
+        )
+
+        val operation = PendingOperation(
+            orgSlug = domainStock.orgSlug,
+            orgId = domainStock.orgId,
+            entityId = domainStock.id,
+            entityType = EntityType.Stock,
+            operationScope = OperationScope.EVENT,
+            operationType = OperationType.UPDATE_STOCK_QUANTITY,
+            payloadJson = JsonConverter.toJson(remote),
+        )
 
         try {
             localDataSource.insertLocalStock(local)
-            //notificationBus.emit(NotificationEvent.Success("Stock updated successfully"))
+            pendingOperationDao.upsertPendingOperation(operation)
+            notificationBus.emit(NotificationEvent.Success("Stock quantity updated successfully"))
         }catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Stock failed to update"))
         }
@@ -76,12 +96,13 @@ class StockRepositoryImpl @Inject constructor(
             entityId = domainStock.id,
             entityType = EntityType.Stock,
             operationType = OperationType.CREATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         try {
             localDataSource.insertLocalStock(local)
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Stock created successfully"))
         }catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Another domainStock with the same period already exists"))
@@ -100,11 +121,12 @@ class StockRepositoryImpl @Inject constructor(
             entityId = domainStock.id,
             entityType = EntityType.Stock,
             operationType = OperationType.UPDATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.insertLocalStock(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     override suspend fun deleteStock(domainStock: DomainStock) {
@@ -118,12 +140,13 @@ class StockRepositoryImpl @Inject constructor(
             orgId = domainStock.orgId,
             entityId = domainStock.id,
             entityType = EntityType.Stock,
+            operationScope = OperationScope.STATE,
             operationType = OperationType.DELETE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.deleteLocalStock(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
 
     }
 

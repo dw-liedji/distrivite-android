@@ -30,7 +30,14 @@ class StockRemoteDataSourceImpl @Inject constructor(
         return remoteStockService.updateRemoteStock(organization, remoteStock.id, remoteStock)
     }
 
-  override suspend fun deleteRemoteStock(organization:String, remoteStockId: String): RemoteStock {
+    override suspend fun updateRemoteStockQuantity(
+        organization: String,
+        remoteStock: RemoteStock
+    ): RemoteStock {
+        return remoteStockService.updateRemoteStockQuantity(organization, remoteStock.id, remoteStock)
+    }
+
+    override suspend fun deleteRemoteStock(organization:String, remoteStockId: String): RemoteStock {
         return remoteStockService.deleteRemoteStock(organization, remoteStockId)
     }
 }

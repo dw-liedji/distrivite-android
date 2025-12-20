@@ -12,6 +12,7 @@ import com.datavite.distrivite.data.local.model.SyncStatus
 import com.datavite.distrivite.data.mapper.TeachingSessionMapper
 import com.datavite.distrivite.data.remote.datasource.TeachingSessionRemoteDataSource
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.domain.model.DomainTeachingSession
 import com.datavite.distrivite.domain.notification.NotificationBus
@@ -69,12 +70,13 @@ class TeachingSessionRepositoryImpl @Inject constructor(
             entityId = domainTeachingSession.id,
             entityType = EntityType.Session,
             operationType = OperationType.CREATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         try {
             localDataSource.insertTeachingSession(local)
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Session created successfully"))
         }catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Another session with the same period already exists"))
@@ -93,11 +95,12 @@ class TeachingSessionRepositoryImpl @Inject constructor(
             entityId = domainTeachingSession.id,
             entityType = EntityType.Session,
             operationType = OperationType.UPDATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.saveLocalTeachingSession(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     override suspend fun deleteTeachingSession(domainTeachingSession: DomainTeachingSession) {
@@ -109,11 +112,12 @@ class TeachingSessionRepositoryImpl @Inject constructor(
             entityId = domainTeachingSession.id,
             entityType = EntityType.Session,
             operationType = OperationType.DELETE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.deleteLocalTeachingSession(domainTeachingSession.id)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
 
     }
 
@@ -138,11 +142,12 @@ class TeachingSessionRepositoryImpl @Inject constructor(
             entityId = domainTeachingSession.id,
             entityType = EntityType.Session,
             operationType = OperationType.APPROVE_SESSION,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.saveLocalTeachingSession(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     override suspend fun start(domainTeachingSession: DomainTeachingSession) {
@@ -169,11 +174,12 @@ class TeachingSessionRepositoryImpl @Inject constructor(
             entityId = domainTeachingSession.id,
             entityType = EntityType.Session,
             operationType = OperationType.START_SESSION,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.saveLocalTeachingSession(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
 
     }
 
@@ -198,11 +204,12 @@ class TeachingSessionRepositoryImpl @Inject constructor(
             entityId = domainTeachingSession.id,
             entityType = EntityType.Session,
             operationType = OperationType.END_SESSION,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.saveLocalTeachingSession(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
 
         // Check if there's already a notification action for this session
         val existing = pendingNotificationDao.getPendingForSession(domainTeachingSession.id)

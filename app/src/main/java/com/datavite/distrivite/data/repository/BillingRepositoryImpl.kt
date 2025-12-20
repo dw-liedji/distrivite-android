@@ -17,6 +17,7 @@ import com.datavite.distrivite.domain.notification.NotificationEvent
 import com.datavite.distrivite.domain.repository.BillingRepository
 import com.datavite.distrivite.data.local.model.PendingOperation
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.utils.JsonConverter
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -63,6 +64,7 @@ class BillingRepositoryImpl @Inject constructor(
             entityId = domainBilling.id,
             entityType = EntityType.Billing,
             operationType = OperationType.CREATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote)
         )
 
@@ -77,7 +79,7 @@ class BillingRepositoryImpl @Inject constructor(
             )
             // Save pending operation for syncing
             // Assuming you have pendingOperationDao inserted in the constructor if needed
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Billing created successfully"))
         } catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
@@ -99,6 +101,7 @@ class BillingRepositoryImpl @Inject constructor(
             entityId = domainBilling.id,
             entityType = EntityType.Billing,
             operationType = OperationType.UPDATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote)
         )
 
@@ -113,7 +116,7 @@ class BillingRepositoryImpl @Inject constructor(
             )
             // Save pending operation for syncing
             // Assuming you have pendingOperationDao inserted in the constructor if needed
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Billing created successfully"))
         } catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
@@ -138,6 +141,7 @@ class BillingRepositoryImpl @Inject constructor(
             orgId = domainBilling.orgId,
             entityId = domainBilling.id,
             entityType = EntityType.Billing,
+            operationScope = OperationScope.STATE,
             operationType = OperationType.DELIVER_ORDER,
             payloadJson = JsonConverter.toJson(remote)
         )
@@ -153,7 +157,7 @@ class BillingRepositoryImpl @Inject constructor(
             )
             // Save pending operation for syncing
             // Assuming you have pendingOperationDao inserted in the constructor if needed
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Order delivered successfully"))
         } catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
@@ -170,6 +174,7 @@ class BillingRepositoryImpl @Inject constructor(
             orgId = domainBilling.orgId,
             entityId = domainBilling.id,
             entityType = EntityType.Billing,
+            operationScope = OperationScope.STATE,
             operationType = OperationType.DELETE,
             payloadJson = JsonConverter.toJson(remote)
         )

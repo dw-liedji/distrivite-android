@@ -2,6 +2,7 @@ package com.datavite.distrivite.data.local.datastore
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.util.Log
 import android.view.Surface
 import androidx.lifecycle.LiveData
@@ -13,7 +14,6 @@ import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
-import org.tensorflow.lite.task.core.vision.ImageProcessingOptions
 
 class TfLiteFaceRecognitionDataSource(
     private val context: Context,
@@ -64,14 +64,25 @@ class TfLiteFaceRecognitionDataSource(
         }
     }
 
-    private fun getOrientationFromRotation(rotation: Int): ImageProcessingOptions.Orientation {
-        return when(rotation) {
-            Surface.ROTATION_270 -> ImageProcessingOptions.Orientation.BOTTOM_RIGHT
-            Surface.ROTATION_90 -> ImageProcessingOptions.Orientation.TOP_LEFT
-            Surface.ROTATION_180 -> ImageProcessingOptions.Orientation.RIGHT_BOTTOM
-            else -> ImageProcessingOptions.Orientation.RIGHT_TOP
+
+
+    private fun getOrientationFromRotation(bitmap: Bitmap, rotation: Int): Bitmap {
+        if (rotation == Surface.ROTATION_0) return bitmap
+
+        val matrix = Matrix().apply {
+            postRotate(
+                when (rotation) {
+                    Surface.ROTATION_90 -> 90f
+                    Surface.ROTATION_180 -> 180f
+                    Surface.ROTATION_270 -> 270f
+                    else -> 0f
+                }
+            )
         }
+
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
+
 
     override fun processFaceRecognitions(
         bitmap: Bitmap,

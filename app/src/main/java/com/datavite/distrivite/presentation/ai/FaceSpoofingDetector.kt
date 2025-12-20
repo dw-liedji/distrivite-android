@@ -23,7 +23,7 @@ class FaceSpoofingDetector @Inject constructor  (context: Context ) {
     companion object {
         const val THRESHOLD = 0.2f
         const val LAP_VARIANCE_THRESHOLD = 100.0f
-        const val MODEL_PATH = "FaceAntiSpoofing.tflite"
+        const val modelName = "FaceAntiSpoofing.tflite"
         val imgSize = 256
         val numClasses = 2
         private const val SPOOF = "spoof"
@@ -35,12 +35,22 @@ class FaceSpoofingDetector @Inject constructor  (context: Context ) {
     }
 
 
-    private lateinit var interpreter : Interpreter
+    private var interpreter : Interpreter
 
     init {
-        try {
-            interpreter = Interpreter(FileUtil.loadMappedFile( context, MODEL_PATH ) , createInterpreterOptions() )
-        }catch (e:Exception) {e.printStackTrace() }
+        // Initialize TFLiteInterpreter
+        val compatList = CompatibilityList()
+
+        val interpreterOptions = Interpreter.Options().apply{
+            if(compatList.isDelegateSupportedOnThisDevice){
+                // if the device has a supported GPU, add the GPU delegate
+                val delegateOptions = compatList.bestOptionsForThisDevice
+                this.addDelegate(GpuDelegate(delegateOptions))
+            } else {
+                this.setNumThreads(min(4, Runtime.getRuntime().availableProcessors()))
+            }
+        }
+        interpreter = Interpreter(FileUtil.loadMappedFile( context, modelName ) , interpreterOptions )
     }
 
     private fun preprocessImage(bitmap: Bitmap): TensorImage {
@@ -54,25 +64,6 @@ class FaceSpoofingDetector @Inject constructor  (context: Context ) {
         // Process the image
         return imageProcessor.process(tensorImage)
     }
-    private fun createInterpreterOptions(): Interpreter.Options {
-        val options = Interpreter.Options()
-        val compatList = CompatibilityList()
-        if (compatList.isDelegateSupportedOnThisDevice) {
-            // Use GPU delegate if available
-            val delegateOptions = compatList.bestOptionsForThisDevice
-            val gpuDelegate = GpuDelegate(delegateOptions)
-            options.addDelegate(gpuDelegate)
-            Log.d("distrivite-ai", "GPU is available!")
-        } else {
-            // Use multi-threaded CPU if GPU is not supported
-            val availableProcessors = Runtime.getRuntime().availableProcessors()
-            options.setNumThreads(min(4, availableProcessors))
-            Log.d("distrivite-ai", "GPU not available, using CPU with ${min(4, availableProcessors)} threads.")
-        }
-        options.setUseXNNPACK(true)
-        return options
-    }
-
 
 
      fun isLiveFace(bitmap: Bitmap): Boolean {

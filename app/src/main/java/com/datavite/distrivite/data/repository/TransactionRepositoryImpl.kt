@@ -11,6 +11,7 @@ import com.datavite.distrivite.data.local.model.SyncStatus
 import com.datavite.distrivite.data.mapper.TransactionMapper
 import com.datavite.distrivite.data.remote.datasource.TransactionRemoteDataSource
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.domain.model.DomainTransaction
 import com.datavite.distrivite.domain.notification.NotificationBus
@@ -59,12 +60,13 @@ class TransactionRepositoryImpl @Inject constructor(
             entityId = domainTransaction.id,
             entityType = EntityType.Transaction,
             operationType = OperationType.CREATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         try {
             localDataSource.insertLocalTransaction(local)
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Transaction created successfully"))
         } catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Another transaction with the same ID already exists"))
@@ -82,11 +84,12 @@ class TransactionRepositoryImpl @Inject constructor(
             entityId = domainTransaction.id,
             entityType = EntityType.Transaction,
             operationType = OperationType.UPDATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.insertLocalTransaction(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     override suspend fun deleteTransaction(domainTransaction: DomainTransaction) {
@@ -100,11 +103,12 @@ class TransactionRepositoryImpl @Inject constructor(
             entityId = domainTransaction.id,
             entityType = EntityType.Transaction,
             operationType = OperationType.DELETE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.deleteLocalTransaction(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     override suspend fun fetchIfEmpty(organization: String) {

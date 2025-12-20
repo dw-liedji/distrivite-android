@@ -3,11 +3,9 @@ package com.datavite.distrivite.presentation.ai
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.datavite.distrivite.presentation.ai.FaceSpoofingDetector.Companion.modelName
 import com.datavite.distrivite.presentation.ai.model.ModelInfo
 import org.tensorflow.lite.DataType
-import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
-import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.common.TensorOperator
 import org.tensorflow.lite.support.image.ImageProcessor
@@ -15,9 +13,13 @@ import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import org.tensorflow.lite.support.tensorbuffer.TensorBufferFloat
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
+import org.tensorflow.lite.gpu.GpuDelegate
 import java.nio.ByteBuffer
 import javax.inject.Inject
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -75,29 +77,25 @@ class FaceEmbeddingProcessor @Inject constructor   (
 
     private var interpreter : Interpreter
     private val imageTensorProcessor = ImageProcessor.Builder()
-        .add( ResizeOp( imgSize , imgSize , ResizeOp.ResizeMethod.BILINEAR ) )
-        .add( StandardizeOp() )
+        .add(ResizeOp( imgSize , imgSize , ResizeOp.ResizeMethod.BILINEAR ) )
+        .add(StandardizeOp() )
         .build()
+
 
     init {
         // Initialize TFLiteInterpreter
-        val interpreterOptions = Interpreter.Options().apply {
-            // Add the GPU Delegate if supported.
-            // See -> https://www.tensorflow.org/lite/performance/gpu#android
-            if ( useGpu ) {
-                if ( CompatibilityList().isDelegateSupportedOnThisDevice ) {
-                    addDelegate( GpuDelegate( CompatibilityList().bestOptionsForThisDevice ))
-                }
+        val compatList = CompatibilityList()
+
+        val interpreterOptions = Interpreter.Options().apply{
+            if(compatList.isDelegateSupportedOnThisDevice){
+                // if the device has a supported GPU, add the GPU delegate
+                val delegateOptions = compatList.bestOptionsForThisDevice
+                this.addDelegate(GpuDelegate(delegateOptions))
+            } else {
+                this.setNumThreads(min(4, Runtime.getRuntime().availableProcessors()))
             }
-            else {
-                // Number of threads for computation
-                setNumThreads(2)
-            }
-            setUseXNNPACK(useXNNPack)
-            setUseNNAPI(true)
         }
-        interpreter = Interpreter(FileUtil.loadMappedFile(context, model.assetsFilename ) , interpreterOptions )
-        Log.i( "distrivite-ai","Using ${model.name} model.")
+        interpreter = Interpreter(FileUtil.loadMappedFile( context, modelName ) , interpreterOptions )
     }
 
 

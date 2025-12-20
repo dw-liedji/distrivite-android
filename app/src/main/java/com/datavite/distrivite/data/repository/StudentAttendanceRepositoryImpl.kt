@@ -8,6 +8,7 @@ import com.datavite.distrivite.data.local.model.SyncStatus
 import com.datavite.distrivite.data.mapper.StudentAttendanceMapper
 import com.datavite.distrivite.data.remote.datasource.StudentAttendanceRemoteDataSource
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.domain.model.DomainStudentAttendance
 import com.datavite.distrivite.domain.repository.StudentAttendanceRepository
@@ -35,11 +36,12 @@ class StudentAttendanceRepositoryImpl @Inject constructor (
             entityId = attendance.id,
             entityType = EntityType.Attendance,
             operationType = OperationType.CREATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.saveAttendance(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     // ✅ Local update (no sync)
@@ -54,11 +56,12 @@ class StudentAttendanceRepositoryImpl @Inject constructor (
             entityId = attendance.id,
             entityType = EntityType.Attendance,
             operationType = OperationType.UPDATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.saveAttendance(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     // ✅ Local delete (no sync)
@@ -73,11 +76,12 @@ class StudentAttendanceRepositoryImpl @Inject constructor (
             entityId = attendance.id,
             entityType = EntityType.Attendance,
             operationType = OperationType.DELETE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.deleteAttendance(attendance.id)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     // ✅ Queries (all local)

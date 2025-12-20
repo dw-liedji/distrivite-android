@@ -464,8 +464,7 @@ class ShoppingViewModel @Inject constructor(
 
                         if (_shoppingUiState.value.isDelivered) {
                             for (selectedStock in _shoppingUiState.value.selectedStocks) {
-                                val newStockQuantity = selectedStock.domainStock.quantity - selectedStock.quantity
-                                stockRepository.updateStockQuantity(selectedStock.domainStock, newStockQuantity)
+                                stockRepository.updateStockQuantity(selectedStock.domainStock, - selectedStock.quantity)
                             }
                         }
 

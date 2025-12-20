@@ -4,13 +4,41 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import com.datavite.distrivite.data.local.model.PendingOperation
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PendingOperationDao {
+
+    @Query("""
+    DELETE FROM pending_operations WHERE entityType = :entityType
+      AND entityId = :entityId AND orgId = :orgId AND operationType = :operationType
+    """)
+    suspend fun deleteSimilarStateOperation(
+        entityType: EntityType,
+        entityId: String,
+        orgId: String,
+        operationType: OperationType
+    )
+
+
+    @Transaction
+    suspend fun upsertPendingOperation(op: PendingOperation) {
+        if (op.operationScope == OperationScope.STATE) {
+            deleteSimilarStateOperation(
+                op.entityType,
+                op.entityId,
+                op.orgId,
+                op.operationType
+            )
+        }
+        insert(op)
+    }
+
 
     // 🔥 Insert or replace based on composite PK
     @Insert(onConflict = OnConflictStrategy.REPLACE)

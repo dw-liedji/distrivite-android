@@ -3,6 +3,7 @@ package com.datavite.distrivite.presentation.ai
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import org.tensorflow.lite.Delegate
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
@@ -13,6 +14,7 @@ import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
 import java.nio.ByteBuffer
 import javax.inject.Inject
+import kotlin.math.min
 
 // Mask Detection model
 // Source -> https://github.com/achen353/Face-Mask-Detector
@@ -20,6 +22,8 @@ class FaceMaskDetector @Inject constructor  (context: Context ) {
 
     val MASK = "mask"
     val NO_MASK = "no mask"
+
+    val TAG = "TOTO"
 
     private val imgSize = 224
     private val numClasses = 2
@@ -29,25 +33,26 @@ class FaceMaskDetector @Inject constructor  (context: Context ) {
     )
     private val modelName = "mask_detector.tflite"
 
-    private var interpreter : Interpreter
+    //private var interpreter : Interpreter
+    private var interpreter: Interpreter
     private val imageTensorProcessor = ImageProcessor.Builder()
         .add( ResizeOp( imgSize , imgSize , ResizeOp.ResizeMethod.BILINEAR ) )
         .add( NormalizeOp( 127.5f ,127.5f ) )
         .build()
 
+
     init {
         // Initialize TFLiteInterpreter
-        val interpreterOptions = Interpreter.Options().apply {
-            // Add the GPU Delegate if supported.
-            // See -> https://www.tensorflow.org/lite/performance/gpu#android
-            if ( CompatibilityList().isDelegateSupportedOnThisDevice ) {
-                addDelegate( GpuDelegate( CompatibilityList().bestOptionsForThisDevice ) )
+        val compatList = CompatibilityList()
+
+        val interpreterOptions = Interpreter.Options().apply{
+            if(compatList.isDelegateSupportedOnThisDevice){
+                // if the device has a supported GPU, add the GPU delegate
+                val delegateOptions = compatList.bestOptionsForThisDevice
+                this.addDelegate(GpuDelegate(delegateOptions))
+            } else {
+                this.setNumThreads(min(4, Runtime.getRuntime().availableProcessors()))
             }
-            else {
-                // Number of threads for computation
-                //Interpreter.Options.setNumThreads = 4
-            }
-            setUseXNNPACK(true)
         }
         interpreter = Interpreter(FileUtil.loadMappedFile( context, modelName ) , interpreterOptions )
     }

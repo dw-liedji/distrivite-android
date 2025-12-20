@@ -5,6 +5,7 @@ enum class OperationType {
     UPDATE,
     DELETE,
     DELIVER_ORDER,
+    UPDATE_STOCK_QUANTITY,
     APPROVE_SESSION,
     START_SESSION,
     END_SESSION

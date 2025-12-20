@@ -11,6 +11,7 @@ import com.datavite.distrivite.data.local.model.SyncStatus
 import com.datavite.distrivite.data.mapper.CustomerMapper
 import com.datavite.distrivite.data.remote.datasource.CustomerRemoteDataSource
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.domain.model.DomainCustomer
 import com.datavite.distrivite.domain.notification.NotificationBus
@@ -57,12 +58,13 @@ class CustomerRepositoryImpl @Inject constructor(
             entityId = domainCustomer.id,
             entityType = EntityType.Customer,
             operationType = OperationType.CREATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         try {
             localDataSource.insertLocalCustomer(local)
-            pendingOperationDao.insert(operation)
+            pendingOperationDao.upsertPendingOperation(operation)
             notificationBus.emit(NotificationEvent.Success("Customer created successfully"))
         }catch (e: SQLiteConstraintException) {
             notificationBus.emit(NotificationEvent.Failure("Another domainCustomer with the same period already exists"))
@@ -91,11 +93,12 @@ class CustomerRepositoryImpl @Inject constructor(
             entityId = domainCustomer.id,
             entityType = EntityType.Customer,
             operationType = OperationType.UPDATE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.insertLocalCustomer(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
     }
 
     override suspend fun deleteCustomer(domainCustomer: DomainCustomer) {
@@ -110,11 +113,12 @@ class CustomerRepositoryImpl @Inject constructor(
             entityId = domainCustomer.id,
             entityType = EntityType.Customer,
             operationType = OperationType.DELETE,
+            operationScope = OperationScope.STATE,
             payloadJson = JsonConverter.toJson(remote),
         )
 
         localDataSource.deleteLocalCustomer(local)
-        pendingOperationDao.insert(operation)
+        pendingOperationDao.upsertPendingOperation(operation)
 
     }
 

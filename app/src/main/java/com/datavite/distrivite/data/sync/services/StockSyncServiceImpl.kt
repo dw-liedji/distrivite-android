@@ -12,6 +12,7 @@ import com.datavite.distrivite.data.remote.model.RemoteStock
 import com.datavite.distrivite.data.sync.EntityType
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.data.sync.SyncConfig
+import com.datavite.distrivite.domain.notification.NotificationEvent
 import kotlinx.coroutines.delay
 import retrofit2.HttpException
 import java.io.IOException
@@ -55,6 +56,24 @@ class StockSyncServiceImpl @Inject constructor(
             throw e
         }
     }
+
+    // --- Push UPDATE QUANTITY ---
+    private suspend fun pushUpdatedStockQuantity(remoteStock: RemoteStock) {
+        try {
+            Log.i("StockSync", "synced updated stock quantity ${remoteStock.id} started")
+
+            val remote = remoteDataSource.updateRemoteStockQuantity(remoteStock.orgSlug, remoteStock)
+            val updatedDomain = stockMapper.mapRemoteToDomain(remote)
+            val localEntity = stockMapper.mapDomainToLocal(updatedDomain)
+
+            localDataSource.insertLocalStock(localEntity)
+            Log.i("StockSync", "Successfully synced updated stock quantity ${remoteStock.id}")
+        } catch (e: Exception) {
+            handleStockSyncException(e, remoteStock.id, "UPDATE")
+            throw e
+        }
+    }
+
 
     // --- Push DELETE ---
     private suspend fun pushDeletedStock(remoteStock: RemoteStock) {
@@ -172,12 +191,15 @@ class StockSyncServiceImpl @Inject constructor(
 
         localDataSource.updateSyncStatus(currentOperation.entityId, SyncStatus.SYNCING)
 
+        Log.i("StockSyncOperation", "Start operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}")
+
         try {
             when (currentOperation.operationType) {
                 OperationType.CREATE -> pushCreatedStock(stock)
                 OperationType.UPDATE -> pushUpdatedStock(stock)
-                OperationType.START_SESSION -> {}  // Session-specific operations
-                OperationType.END_SESSION -> {}    // Session-specific operations
+                OperationType.UPDATE_STOCK_QUANTITY -> pushUpdatedStockQuantity(stock)
+                OperationType.START_SESSION -> {}  // session-specific operations
+                OperationType.END_SESSION -> {}    // session-specific operations
                 OperationType.DELETE -> pushDeletedStock(stock)
                 else -> {} // ignore other types
             }
@@ -217,7 +239,7 @@ class StockSyncServiceImpl @Inject constructor(
         }
     }
 
-    override fun getEntity(): EntityType = EntityType.Session
+    override fun getEntity(): EntityType = EntityType.Stock
 
     // --- Sync Logic ---
     private fun shouldPerformFullSync(lastSync: Long?): Boolean {
@@ -229,13 +251,13 @@ class StockSyncServiceImpl @Inject constructor(
     }
 
     private suspend fun getLastSyncTimestamp(): Long? {
-        return syncMetadataDao.getLastSyncTimestamp(EntityType.Session)
+        return syncMetadataDao.getLastSyncTimestamp(EntityType.Stock)
     }
 
     private suspend fun updateLastSyncTimestamp(timestamp: Long, success: Boolean = true, error: String? = null) {
-        syncMetadataDao.updateLastSync(EntityType.Session, timestamp, success)
+        syncMetadataDao.updateLastSync(EntityType.Stock, timestamp, success)
         if (error != null) {
-            syncMetadataDao.updateSyncStatus(EntityType.Session, false, error)
+            syncMetadataDao.updateSyncStatus(EntityType.Stock, false, error)
         }
     }
 

@@ -1,6 +1,7 @@
 package com.datavite.distrivite.presentation.billing
 
 import android.content.Intent
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -45,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.datavite.distrivite.domain.model.DomainBilling
 import com.datavite.distrivite.app.BottomNavigationBar
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
+import com.datavite.distrivite.domain.model.DomainBillingItem
 import com.datavite.distrivite.domain.model.DomainBillingPayment
 import com.datavite.distrivite.presentation.components.TiqtaqTopBar
 import com.datavite.distrivite.utils.BillPDFExporter
@@ -54,6 +56,7 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.BillingScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -157,8 +160,12 @@ fun BillingScreen(
                             BillPDFExporter.exportBillToPDF(context, it, selectedBilling.billNumber)
                         } ?: Toast.makeText(context, "Bill view not ready", Toast.LENGTH_SHORT).show()
                     },
+                    onAddItem = {},
+                    onEditItem = {viewModel.showEditItemDialog(it)},
+                    onDeleteItem = {},
                     onAddPayment = { viewModel.showAddPaymentDialog() }, // Changed to dialog
-                    onDeletePayment = { payment -> viewModel.deletePayment(payment) },
+                    onEditPayment = {viewModel.showEditPaymentDialog(it)},
+                    onDeletePayment = { viewModel.deletePayment(it) },
                     onDeleteBill = { viewModel.showDeleteDialog() },
                     onClose = { viewModel.unselectBilling() },
                     onDeliver = { viewModel.deliverBill() }
@@ -172,6 +179,23 @@ fun BillingScreen(
                 billing = billingUiState.selectedBilling,
                 onAddPayment = { amount, broker -> viewModel.addPayment(amount, broker) },
                 onDismiss = { viewModel.hideAddPaymentDialog() }
+            )
+        }
+
+        billingUiState.selectedItemToEdit?.let {
+            EditItemDialog(
+                item = it,
+                onUpdateItem = viewModel::onUpdateItem,
+                onDismiss = viewModel::dismissItemDialog
+            )
+        }
+
+        billingUiState.selectedPaymentToEdit?.let {
+            EditPaymentDialog(
+                payment = it,
+                billing = billingUiState.selectedBilling,
+                onUpdatePayment = viewModel::onUpdatePayment,
+                onDismiss = viewModel::dismissPaymentDialog
             )
         }
 
@@ -239,7 +263,11 @@ fun BillingDetailModal(
     onPrintBill: () -> Unit,
     onDeliver: () -> Unit,
     onAddPayment: () -> Unit,
+    onEditPayment: (DomainBillingPayment) -> Unit,
     onDeletePayment: (DomainBillingPayment) -> Unit,
+    onAddItem: () -> Unit,
+    onEditItem: (DomainBillingItem) -> Unit,
+    onDeleteItem: (DomainBillingItem) -> Unit,
     onDeleteBill: () -> Unit,
     onClose: () -> Unit
 ) {
@@ -325,23 +353,46 @@ fun BillingDetailModal(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Items Section
-        Text("Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxHeight(0.3f)
-                .padding(top = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        // Items Section with Add Action
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            items(billing.items) { item ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+            Text("Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            if (authOrgUser?.canAddItem == true) { // Add permission check
+                FilledTonalButton(
+                    onClick = onAddItem,
+                    modifier = Modifier.height(36.dp)
                 ) {
-                    Text(item.stockName, style = MaterialTheme.typography.bodyMedium)
-                    Text("${item.quantity} x ${item.unitPrice} FCFA", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add Item", style = MaterialTheme.typography.labelSmall)
                 }
-                HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+            }
+        }
+
+        if (billing.items.isEmpty()) {
+            Text(
+                "No items yet",
+                color = Color.Gray,
+                modifier = Modifier.padding(vertical = 12.dp)
+            )
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxHeight(0.3f)
+                    .padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(billing.items) { item ->
+                    ItemRow(
+                        item = item,
+                        authOrgUser = authOrgUser,
+                        onEdit = { onEditItem(item) },
+                        onDelete = { onDeleteItem(item) }
+                    )
+                }
             }
         }
 
@@ -354,7 +405,7 @@ fun BillingDetailModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Payments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (!isFullyPaid) {
+            if (!isFullyPaid && authOrgUser?.canAddPayment == true) {
                 FilledTonalButton(
                     onClick = onAddPayment,
                     modifier = Modifier.height(36.dp)
@@ -383,6 +434,7 @@ fun BillingDetailModal(
                     PaymentItem(
                         domainBillingPayment = payment,
                         authOrgUser = authOrgUser,
+                        onEdit = { onEditPayment(payment) },
                         onDelete = { onDeletePayment(payment) }
                     )
                 }
@@ -396,7 +448,6 @@ fun BillingDetailModal(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-
             if (authOrgUser!!.isManager || authOrgUser.isAdmin) OutlinedButton(
                 onClick = onDeleteBill,
                 modifier = Modifier.weight(1f),
@@ -420,7 +471,6 @@ fun BillingDetailModal(
                 Text("Deliver", fontSize = 11.sp)
             }
 
-
             if(authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.canPrintBill) OutlinedButton(
                 onClick = onPrintBill,
                 modifier = Modifier.weight(1f),
@@ -443,9 +493,10 @@ fun BillingDetailModal(
 }
 
 @Composable
-fun PaymentItem(
-    domainBillingPayment: DomainBillingPayment,
+fun ItemRow(
+    item: DomainBillingItem,
     authOrgUser: AuthOrgUser?,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -459,20 +510,142 @@ fun PaymentItem(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        item.stockName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    /*
+
+                    if (item.isModified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Modified",
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                     */
+                }
                 Text(
-                    domainBillingPayment.transactionBroker.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    "${item.quantity} × ${item.unitPrice} FCFA = ${item.quantity * item.unitPrice} FCFA",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                /*
+                if (item.discount > 0) {
+                    Text(
+                        "Discount: ${item.discount} FCFA",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                 */
+            }
+
+            // Action buttons for items
+            Row {
+                if (authOrgUser!!.isManager || authOrgUser.isAdmin || authOrgUser.canEditItem) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit item",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.canDeleteItem) {
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete item",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PaymentItem(
+    domainBillingPayment: DomainBillingPayment,
+    authOrgUser: AuthOrgUser?,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        domainBillingPayment.transactionBroker.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    /*
+                    if (domainBillingPayment.isModified) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Modified",
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                     */
+                }
                 Text(
                     "Paid: ${domainBillingPayment.amount} FCFA",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    "Date: ${domainBillingPayment.created.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
             }
 
-            if (authOrgUser!!.isManager || authOrgUser.isAdmin)
+            Row {
+                if (authOrgUser!!.isManager || authOrgUser.isAdmin || authOrgUser.canEditPayment)
+                    IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = "Edit payment",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.canDeletePayment)
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier.size(36.dp)
@@ -484,6 +657,7 @@ fun PaymentItem(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+            }
         }
     }
 }
@@ -581,6 +755,134 @@ fun AddPaymentDialog(
     )
 }
 
+@Composable
+fun EditItemDialog(
+    item: DomainBillingItem?,
+    onUpdateItem: (updatedItem: DomainBillingItem) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (item == null) return
+
+    var quantity by remember { mutableStateOf(item.quantity.toString()) }
+    var unitPrice by remember { mutableStateOf(item.unitPrice.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Item: ${item.stockName}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = { Text("Quantity") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = unitPrice,
+                    onValueChange = { unitPrice = it },
+                    label = { Text("Unit Price (FCFA)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedItem = item.copy(
+                        quantity = quantity.toIntOrNull() ?: item.quantity,
+                        unitPrice = unitPrice.toDoubleOrNull() ?: item.unitPrice,
+                        //isModified = true
+                    )
+                    onUpdateItem(updatedItem)
+                    onDismiss()
+                }
+            ) {
+                Text("Update Item")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditPaymentDialog(
+    payment: DomainBillingPayment?,
+    billing: DomainBilling?,
+    onUpdatePayment: (updatedPayment: DomainBillingPayment) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (payment == null || billing == null) return
+
+    var amount by remember { mutableStateOf(payment.amount.toString()) }
+    var selectedBroker by remember { mutableStateOf(payment.transactionBroker) }
+
+    val remainingDue = remember(billing, payment) {
+        val otherPayments = billing.payments.filter { it.id != payment.id }
+        val totalOtherPaid = otherPayments.sumOf { it.amount }
+        (billing.totalPrice - totalOtherPaid).coerceAtLeast(0.0)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Payment") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Remaining due info
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+                ) {
+                    Text(
+                        "Remaining due after other payments: $remainingDue FCFA",
+                        modifier = Modifier.padding(8.dp),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Amount (FCFA)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Payment method selection (simplified)
+                Text("Payment Method:", style = MaterialTheme.typography.bodySmall)
+                // Add your payment method selection UI here
+
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val updatedPayment = payment.copy(
+                        amount = amount.toDoubleOrNull() ?: payment.amount,
+                        transactionBroker = selectedBroker,
+                        //
+                        // isModified = true
+                    )
+                    onUpdatePayment(updatedPayment)
+                    onDismiss()
+                }
+            ) {
+                Text("Update Payment")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
 @Composable
 private fun PaymentHeader(due: Double) {
     Card(
