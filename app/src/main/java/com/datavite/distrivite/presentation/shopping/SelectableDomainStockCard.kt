@@ -64,7 +64,7 @@ private fun StockTag(quantity: Int) {
 fun SelectableDomainStockCard(
     domainStock: DomainStock,
     selectedStock: SelectedDomainStock?,
-    authOrgUser: AuthOrgUser?,
+    authOrgUser: AuthOrgUser,
     onToggle: () -> Unit,
     onQuantityChange: (Int) -> Unit,
     onPriceChange: (Double) -> Unit,

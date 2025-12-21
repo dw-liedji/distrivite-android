@@ -12,7 +12,7 @@ interface RetrofitPrivateAuthService {
     @GET("en/api/v1/auth/users/me/")
     suspend fun getUser(): AuthUser
 
-    @POST("en/api/v1/auth/org/verify/")
+    @POST("en/api/v1/auth/org/verify2/")
     suspend fun authOrgUser(
         @Body request: AuthOrgUserRequest
     ): AuthOrgUser

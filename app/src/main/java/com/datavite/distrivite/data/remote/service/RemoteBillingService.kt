@@ -28,7 +28,7 @@ interface RemoteBillingService {
     ): List<RemoteBilling>
 
 
-    @POST("en/{organization}/api/v1/data/sales/create/")
+    @POST("en/{organization}/api/v1/data/sales/create2/")
     suspend fun createRemoteBilling(
         @Path("organization") organization: String,
         @Body remoteRemoteBilling: RemoteBilling

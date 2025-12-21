@@ -30,7 +30,7 @@ import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 @Composable
 fun OrderVerificationBottomSheet(
     selectedStocks: List<SelectedDomainStock>,
-    authOrgUser: AuthOrgUser?,
+    authOrgUser: AuthOrgUser,
     totalAmount: Double,
     onQuantityChange: (stockId: String, newQuantity: Int) -> Unit,
     onPriceChange: (stockId: String, newPrice: Double) -> Unit,

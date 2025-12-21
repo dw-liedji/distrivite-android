@@ -14,15 +14,6 @@ data class AuthOrgUser(
     @SerialName("is_manager") val isManager: Boolean,
     @SerialName("is_device") val isDevice: Boolean,
     @SerialName("is_gps_active") val isGPSActive: Boolean,
-    @SerialName("can_edit_price") val canEditPrice: Boolean,
-    @SerialName("can_print_bill") val canPrintBill: Boolean = false,
-    @SerialName("can_add_item") val canAddItem: Boolean = false,
-    @SerialName("can_edit_item") val canEditItem: Boolean = false,
-    @SerialName("can_delete_item") val canDeleteItem: Boolean = false,
-    @SerialName("can_add_payment") val canAddPayment: Boolean = false,
-    @SerialName("can_edit_payment") val canEditPayment: Boolean = false,
-    @SerialName("can_delete_payment") val canDeletePayment: Boolean = false,
-    @SerialName("can_print_transaction") val canPrintTransaction: Boolean = false,
     @SerialName("is_liveness_active") val isLivenessActive: Boolean,
     @SerialName("check_in_latitude") val checkInLatitude:Double,
     @SerialName("check_in_longitude") val checkInLongitude:Double,
@@ -34,6 +25,7 @@ data class AuthOrgUser(
     @SerialName("org_slug") val orgSlug: String,
     @SerialName("name") val name: String,
     @SerialName("embeddings") val embeddings: List<List<Float>>,
+    @SerialName("permissions") val permissions: Set<String>,
 )
 
 

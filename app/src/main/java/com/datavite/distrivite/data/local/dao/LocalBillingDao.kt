@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface LocalBillingDao {
 
+    @Transaction
     @Query("""
         SELECT * FROM localBillings 
         WHERE customerName LIKE '%' || :searchQuery || '%' 

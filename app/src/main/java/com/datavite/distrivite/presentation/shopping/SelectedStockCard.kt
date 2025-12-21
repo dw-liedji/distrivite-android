@@ -38,7 +38,7 @@ import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 @Composable
 fun SelectedStockCard(
     selectedStock: SelectedDomainStock,
-    authOrgUser: AuthOrgUser?,
+    authOrgUser: AuthOrgUser,
     onQuantityChange: (stockId: String, newQuantity: Int) -> Unit,
     onPriceChange: (stockId: String, newPrice: Double) -> Unit,
     onLockToggle: (stockId: String) -> Unit,

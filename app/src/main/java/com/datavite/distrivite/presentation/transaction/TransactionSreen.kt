@@ -91,6 +91,8 @@ import com.datavite.distrivite.app.BottomNavigationBar
 import com.datavite.distrivite.data.local.model.SyncStatus
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.domain.model.DomainTransaction
+import com.datavite.distrivite.domain.model.auth.AppPermission
+import com.datavite.distrivite.domain.model.auth.has
 import com.datavite.distrivite.presentation.components.TiqtaqTopBar
 import com.datavite.distrivite.utils.BillPDFExporter
 import com.datavite.distrivite.utils.TransactionBroker
@@ -138,106 +140,108 @@ fun TransactionScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TiqtaqTopBar(
-                scrollBehavior = scrollBehavior,
-                destinationsNavigator = navigator,
-                onSearchQueryChanged = {  },
-                onSearchClosed = {  },
-                onSync = { viewModel.onRefresh() }
-            )
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.showCreateTransactionForm()
-                },
-                icon = { Icon(Icons.Default.Add, "Add Transaction") },
-                text = { Text("New Transaction") }
-            )
-        },
-        bottomBar = {
-            BottomNavigationBar(
-                route = TransactionScreenDestination.route,
-                destinationsNavigator = navigator
-            )
-        }
-    ) { paddingValues ->
-        Box(
+    authOrgUser?.let { authOrgUser ->
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (transactionUiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                TiqtaqTopBar(
+                    scrollBehavior = scrollBehavior,
+                    destinationsNavigator = navigator,
+                    onSearchQueryChanged = {  },
+                    onSearchClosed = {  },
+                    onSync = { viewModel.onRefresh() }
+                )
+            },
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.showCreateTransactionForm()
+                    },
+                    icon = { Icon(Icons.Default.Add, "Add Transaction") },
+                    text = { Text("New Transaction") }
+                )
+            },
+            bottomBar = {
+                BottomNavigationBar(
+                    route = TransactionScreenDestination.route,
+                    destinationsNavigator = navigator
+                )
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                if (transactionUiState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                } else {
+                    Column(modifier = Modifier.fillMaxSize()) {
 
-                    // Transactions List
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(16.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        items(transactionUiState.transactions) { transaction ->
-                            TransactionCard(
-                                transaction = transaction,
-                                onClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.selectTransaction(transaction)
-                                },
-                            )
+                        // Transactions List
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            items(transactionUiState.transactions) { transaction ->
+                                TransactionCard(
+                                    transaction = transaction,
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.selectTransaction(transaction)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Transaction Details Bottom Sheet
-        transactionUiState.selectedTransaction?.let { selectedTransaction ->
+            // Transaction Details Bottom Sheet
+            transactionUiState.selectedTransaction?.let { selectedTransaction ->
 
-            val billingPdfView = rememberTransactionPdfView(selectedTransaction)
+                val billingPdfView = rememberTransactionPdfView(selectedTransaction)
 
-            ModalBottomSheet(
-                sheetState = bottomSheetState,
-                onDismissRequest = { viewModel.unselectTransaction() }
-            ) {
-                TransactionDetailModal(
-                    transaction = selectedTransaction,
-                    authOrgUser = authOrgUser,
-                    onDelete = {
-                        viewModel.deleteTransaction(selectedTransaction)
-                        viewModel.unselectTransaction()
-                    },
-                    onPrintTransaction = {
-                        billingPdfView?.let {
-                            BillPDFExporter.exportBillToPDF(context, it, selectedTransaction.id.substring(0,5))
-                        } ?: Toast.makeText(context, "Transaction view not ready", Toast.LENGTH_SHORT).show()
+                ModalBottomSheet(
+                    sheetState = bottomSheetState,
+                    onDismissRequest = { viewModel.unselectTransaction() }
+                ) {
+                    TransactionDetailModal(
+                        transaction = selectedTransaction,
+                        authOrgUser = authOrgUser,
+                        onDelete = {
+                            viewModel.deleteTransaction(selectedTransaction)
+                            viewModel.unselectTransaction()
+                        },
+                        onPrintTransaction = {
+                            billingPdfView?.let {
+                                BillPDFExporter.exportBillToPDF(context, it, selectedTransaction.id.substring(0,5))
+                            } ?: Toast.makeText(context, "Transaction view not ready", Toast.LENGTH_SHORT).show()
 
-                    },
-                    onClose = { viewModel.unselectTransaction() }
+                        },
+                        onClose = { viewModel.unselectTransaction() }
+                    )
+                }
+            }
+
+            // Create Transaction Dialog
+            if (transactionUiState.isCreatingTransaction) {
+                CreateTransactionDialog(
+                    transactionUiState = transactionUiState,
+                    onDismiss = { viewModel.hideCreateTransactionForm() },
+                    onAmountChange = { viewModel.updateTransactionAmount(it) },
+                    onReasonChange = { viewModel.updateTransactionReason(it) },
+                    onParticipantChange = { viewModel.updateParticipant(it) },
+                    onTypeChange = { viewModel.updateTransactionType(it) },
+                    onBrokerChange = { viewModel.updateTransactionBroker(it) },
+                    onCreateTransaction = { viewModel.createTransaction() }
                 )
             }
-        }
-
-        // Create Transaction Dialog
-        if (transactionUiState.isCreatingTransaction) {
-            CreateTransactionDialog(
-                transactionUiState = transactionUiState,
-                onDismiss = { viewModel.hideCreateTransactionForm() },
-                onAmountChange = { viewModel.updateTransactionAmount(it) },
-                onReasonChange = { viewModel.updateTransactionReason(it) },
-                onParticipantChange = { viewModel.updateParticipant(it) },
-                onTypeChange = { viewModel.updateTransactionType(it) },
-                onBrokerChange = { viewModel.updateTransactionBroker(it) },
-                onCreateTransaction = { viewModel.createTransaction() }
-            )
         }
     }
 }
@@ -596,7 +600,7 @@ fun TransactionDetailModal(
             horizontalArrangement = Arrangement.spacedBy(6.dp) // Reduced spacing
         ) {
             authOrgUser?.let {
-                if (it.isAdmin || it.isManager || it.canPrintTransaction)
+                if (it.isAdmin || it.isManager || it.permissions.has(AppPermission.ORDERS_PRINT_TRANSACTION))
                 OutlinedButton(
                     onClick = onPrintTransaction,
                     modifier = Modifier.weight(1f),

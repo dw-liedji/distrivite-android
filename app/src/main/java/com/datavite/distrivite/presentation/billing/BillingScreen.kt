@@ -48,6 +48,8 @@ import com.datavite.distrivite.app.BottomNavigationBar
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.domain.model.DomainBillingItem
 import com.datavite.distrivite.domain.model.DomainBillingPayment
+import com.datavite.distrivite.domain.model.auth.AppPermission
+import com.datavite.distrivite.domain.model.auth.has
 import com.datavite.distrivite.presentation.components.TiqtaqTopBar
 import com.datavite.distrivite.utils.BillPDFExporter
 import com.datavite.distrivite.utils.TransactionBroker
@@ -98,113 +100,115 @@ fun BillingScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TiqtaqTopBar(
-                scrollBehavior = scrollBehavior,
-                destinationsNavigator = navigator,
-                onSearchQueryChanged = { query ->
-                    viewModel.updateBillingSearchQuery(query)
-                },
-                onSearchClosed = {
-                    viewModel.updateBillingSearchQuery("")
-                },
-                onSync = {
-                    val intent = Intent(
-                        Intent.ACTION_VIEW,
-                        "https://m.facebook.com/profile.php?id=61555380762150".toUri()
-                    ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                    context.startActivity(intent)
-                }
-            )
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        bottomBar = { BottomNavigationBar(route = BillingScreenDestination.route, destinationsNavigator = navigator) }
-    ) { paddingValues ->
-        Box(
+    authOrgUser?.let { authOrgUser ->
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (billingUiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (billingUiState.filteredBillings.isEmpty()) {
-                EmptyBillingState()
-            } else {
-                BillingList(
-                    billings = billingUiState.filteredBillings,
-                    onBillingClick = { billing ->
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.selectBilling(billing)
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                TiqtaqTopBar(
+                    scrollBehavior = scrollBehavior,
+                    destinationsNavigator = navigator,
+                    onSearchQueryChanged = { query ->
+                        viewModel.updateBillingSearchQuery(query)
+                    },
+                    onSearchClosed = {
+                        viewModel.updateBillingSearchQuery("")
+                    },
+                    onSync = {
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            "https://m.facebook.com/profile.php?id=61555380762150".toUri()
+                        ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                        context.startActivity(intent)
                     }
                 )
-            }
-        }
-
-        // --- Billing Detail Bottom Sheet ---
-        billingUiState.selectedBilling?.let { selectedBilling ->
-            val billingPdfView = rememberBillPdfView(selectedBilling)
-
-            ModalBottomSheet(
-                sheetState = detailSheetState,
-                onDismissRequest = { viewModel.unselectBilling() }
+            },
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            bottomBar = { BottomNavigationBar(route = BillingScreenDestination.route, destinationsNavigator = navigator) }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
-                BillingDetailModal(
-                    billing = selectedBilling,
-                    authOrgUser = authOrgUser,
-                    onPrintBill = {
-                        billingPdfView?.let {
-                            BillPDFExporter.exportBillToPDF(context, it, selectedBilling.billNumber)
-                        } ?: Toast.makeText(context, "Bill view not ready", Toast.LENGTH_SHORT).show()
-                    },
-                    onAddItem = {},
-                    onEditItem = {viewModel.showEditItemDialog(it)},
-                    onDeleteItem = {},
-                    onAddPayment = { viewModel.showAddPaymentDialog() }, // Changed to dialog
-                    onEditPayment = {viewModel.showEditPaymentDialog(it)},
-                    onDeletePayment = { viewModel.deletePayment(it) },
-                    onDeleteBill = { viewModel.showDeleteDialog() },
-                    onClose = { viewModel.unselectBilling() },
-                    onDeliver = { viewModel.deliverBill() }
+                if (billingUiState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                } else if (billingUiState.filteredBillings.isEmpty()) {
+                    EmptyBillingState()
+                } else {
+                    BillingList(
+                        billings = billingUiState.filteredBillings,
+                        onBillingClick = { billing ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.selectBilling(billing)
+                        }
+                    )
+                }
+            }
+
+            // --- Billing Detail Bottom Sheet ---
+            billingUiState.selectedBilling?.let { selectedBilling ->
+                val billingPdfView = rememberBillPdfView(selectedBilling)
+
+                ModalBottomSheet(
+                    sheetState = detailSheetState,
+                    onDismissRequest = { viewModel.unselectBilling() }
+                ) {
+                    BillingDetailModal(
+                        billing = selectedBilling,
+                        authOrgUser = authOrgUser,
+                        onPrintBill = {
+                            billingPdfView?.let {
+                                BillPDFExporter.exportBillToPDF(context, it, selectedBilling.billNumber)
+                            } ?: Toast.makeText(context, "Bill view not ready", Toast.LENGTH_SHORT).show()
+                        },
+                        onAddItem = {},
+                        onEditItem = {viewModel.showEditItemDialog(it)},
+                        onDeleteItem = {},
+                        onAddPayment = { viewModel.showAddPaymentDialog() }, // Changed to dialog
+                        onEditPayment = {viewModel.showEditPaymentDialog(it)},
+                        onDeletePayment = { viewModel.deletePayment(it) },
+                        onDeleteBill = { viewModel.showDeleteDialog() },
+                        onClose = { viewModel.unselectBilling() },
+                        onDeliver = { viewModel.deliverBill() }
+                    )
+                }
+            }
+
+            // --- Payment Dialog ---
+            if (billingUiState.isAddPaymentDialogVisible) {
+                AddPaymentDialog(
+                    billing = billingUiState.selectedBilling,
+                    onAddPayment = { amount, broker -> viewModel.addPayment(amount, broker) },
+                    onDismiss = { viewModel.hideAddPaymentDialog() }
                 )
             }
-        }
 
-        // --- Payment Dialog ---
-        if (billingUiState.isAddPaymentDialogVisible) {
-            AddPaymentDialog(
-                billing = billingUiState.selectedBilling,
-                onAddPayment = { amount, broker -> viewModel.addPayment(amount, broker) },
-                onDismiss = { viewModel.hideAddPaymentDialog() }
-            )
-        }
+            billingUiState.selectedItemToEdit?.let {
+                EditItemDialog(
+                    item = it,
+                    onUpdateItem = viewModel::onUpdateItem,
+                    onDismiss = viewModel::dismissItemDialog
+                )
+            }
 
-        billingUiState.selectedItemToEdit?.let {
-            EditItemDialog(
-                item = it,
-                onUpdateItem = viewModel::onUpdateItem,
-                onDismiss = viewModel::dismissItemDialog
-            )
-        }
+            billingUiState.selectedPaymentToEdit?.let {
+                EditPaymentDialog(
+                    payment = it,
+                    billing = billingUiState.selectedBilling,
+                    onUpdatePayment = viewModel::onUpdatePayment,
+                    onDismiss = viewModel::dismissPaymentDialog
+                )
+            }
 
-        billingUiState.selectedPaymentToEdit?.let {
-            EditPaymentDialog(
-                payment = it,
-                billing = billingUiState.selectedBilling,
-                onUpdatePayment = viewModel::onUpdatePayment,
-                onDismiss = viewModel::dismissPaymentDialog
-            )
-        }
-
-        // --- Delete Confirmation Dialog ---
-        if (billingUiState.isDeleteDialogVisible) {
-            DeleteConfirmationDialog(
-                onConfirm = { viewModel.deleteSelectedBilling() },
-                onDismiss = { viewModel.hideDeleteDialog() }
-            )
+            // --- Delete Confirmation Dialog ---
+            if (billingUiState.isDeleteDialogVisible) {
+                DeleteConfirmationDialog(
+                    onConfirm = { viewModel.deleteSelectedBilling() },
+                    onDismiss = { viewModel.hideDeleteDialog() }
+                )
+            }
         }
     }
 }
@@ -259,7 +263,7 @@ fun BillingList(
 @Composable
 fun BillingDetailModal(
     billing: DomainBilling,
-    authOrgUser: AuthOrgUser?,
+    authOrgUser: AuthOrgUser,
     onPrintBill: () -> Unit,
     onDeliver: () -> Unit,
     onAddPayment: () -> Unit,
@@ -360,7 +364,7 @@ fun BillingDetailModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (authOrgUser?.canAddItem == true) { // Add permission check
+            if (authOrgUser.permissions.has(AppPermission.ORDERS_ADD_BILLING_STOCK)) { // Add permission check
                 FilledTonalButton(
                     onClick = onAddItem,
                     modifier = Modifier.height(36.dp)
@@ -405,7 +409,7 @@ fun BillingDetailModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Payments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (!isFullyPaid && authOrgUser?.canAddPayment == true) {
+            if (!isFullyPaid && authOrgUser.permissions.has(AppPermission.ORDERS_ADD_BILLING_PAYMENT)) {
                 FilledTonalButton(
                     onClick = onAddPayment,
                     modifier = Modifier.height(36.dp)
@@ -448,7 +452,7 @@ fun BillingDetailModal(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            if (authOrgUser!!.isManager || authOrgUser.isAdmin) OutlinedButton(
+            if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_DELETE_BILLING)) OutlinedButton(
                 onClick = onDeleteBill,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.outlinedButtonColors(
@@ -461,7 +465,7 @@ fun BillingDetailModal(
                 Text("Delete", fontSize = 11.sp)
             }
 
-            if((authOrgUser.isManager || authOrgUser.isAdmin) && !billing.isDelivered) OutlinedButton(
+            if((authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_DELIVER_BILLING) ) && !billing.isDelivered) OutlinedButton(
                 onClick = onDeliver,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 4.dp)
@@ -471,7 +475,7 @@ fun BillingDetailModal(
                 Text("Deliver", fontSize = 11.sp)
             }
 
-            if(authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.canPrintBill) OutlinedButton(
+            if(authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_PRINT_BILLING)) OutlinedButton(
                 onClick = onPrintBill,
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 4.dp)
@@ -550,7 +554,7 @@ fun ItemRow(
 
             // Action buttons for items
             Row {
-                if (authOrgUser!!.isManager || authOrgUser.isAdmin || authOrgUser.canEditItem) {
+                if (authOrgUser!!.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_CHANGE_BILLING_STOCK)) {
                     IconButton(
                         onClick = onEdit,
                         modifier = Modifier.size(36.dp)
@@ -563,7 +567,7 @@ fun ItemRow(
                         )
                     }
                 }
-                if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.canDeleteItem) {
+                if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_DELETE_BILLING_STOCK)) {
                     IconButton(
                         onClick = onDelete,
                         modifier = Modifier.size(36.dp)
@@ -632,7 +636,7 @@ fun PaymentItem(
             }
 
             Row {
-                if (authOrgUser!!.isManager || authOrgUser.isAdmin || authOrgUser.canEditPayment)
+                if (authOrgUser!!.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_CHANGE_BILLING_PAYMENT))
                     IconButton(
                     onClick = onEdit,
                     modifier = Modifier.size(36.dp)
@@ -645,7 +649,7 @@ fun PaymentItem(
                     )
                 }
 
-                if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.canDeletePayment)
+                if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_DELETE_BILLING_PAYMENT))
                 IconButton(
                     onClick = onDelete,
                     modifier = Modifier.size(36.dp)

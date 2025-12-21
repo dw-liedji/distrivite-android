@@ -44,6 +44,8 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
+import com.datavite.distrivite.domain.model.auth.AppPermission
+import com.datavite.distrivite.domain.model.auth.has
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -52,7 +54,7 @@ import kotlinx.coroutines.launch
 fun EditablePriceSelector(
     price: Int,
     isLocked: Boolean,
-    authOrgUser: AuthOrgUser?,
+    authOrgUser: AuthOrgUser,
     onPriceChange: (Int) -> Unit,
     onLockToggle: () -> Unit,
     modifier: Modifier = Modifier
@@ -115,7 +117,7 @@ fun EditablePriceSelector(
             }
 
             // Lock / Unlock
-            if (authOrgUser!!.canEditPrice)
+            if (authOrgUser.permissions.has(AppPermission.ORDERS_CHANGE_STOCK_PRICE))
                 IconButton(
                     onClick = onLockToggle,
                     modifier = Modifier

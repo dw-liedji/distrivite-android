@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.datavite.distrivite.app.BottomNavigationBar
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
+import com.datavite.distrivite.domain.model.auth.AppPermission
+import com.datavite.distrivite.domain.model.auth.has
 import com.datavite.distrivite.presentation.billing.rememberBillPdfView
 import com.datavite.distrivite.presentation.components.NotificationHost
 import com.datavite.distrivite.presentation.components.PullToRefreshBox
@@ -117,118 +119,121 @@ fun ShoppingScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            QuantaTopBar(
-                scrollBehavior = scrollBehavior,
-                destinationsNavigator = navigator,
-                onSearchQueryChanged = { query ->
-                    viewModel.updateStockSearchQuery(query) // ✅ Connect search
-                },
-                onSearchClosed = {
-                    viewModel.updateStockSearchQuery("") // Reset filter
-                },
-                pendingCount = shoppingUiState.pendingOperations.size,
-                isSyncing = shoppingUiState.isSyncing,
-                onSync = {
-                    viewModel.manualSync()
-                }
-            )
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        bottomBar = { BottomNavigationBar(route = ShoppingScreenDestination.route, destinationsNavigator = navigator) }
-    ) { paddings ->
+    authOrgUser?.let { authOrgUser ->
 
-        PullToRefreshBox(
-            isRefreshing = shoppingUiState.isLoading,
-            onRefresh = { viewModel.onRefresh() },
-            modifier = Modifier.fillMaxSize().padding(paddings)
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                QuantaTopBar(
+                    scrollBehavior = scrollBehavior,
+                    destinationsNavigator = navigator,
+                    onSearchQueryChanged = { query ->
+                        viewModel.updateStockSearchQuery(query) // ✅ Connect search
+                    },
+                    onSearchClosed = {
+                        viewModel.updateStockSearchQuery("") // Reset filter
+                    },
+                    pendingCount = shoppingUiState.pendingOperations.size,
+                    isSyncing = shoppingUiState.isSyncing,
+                    onSync = {
+                        viewModel.manualSync()
+                    }
+                )
+            },
+            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+            bottomBar = { BottomNavigationBar(route = ShoppingScreenDestination.route, destinationsNavigator = navigator) }
+        ) { paddings ->
 
-                if (authOrgUser?.canPrintBill == true)
-                    shoppingUiState.lastestBilling?.let { billing ->
-                        val billingPdfView = rememberBillPdfView(billing)
-                        billingPdfView?.let {
-                            BillPDFExporter.exportBillToPDF(context, it, billing.billNumber )
-                        } ?: Toast.makeText(context, "Bill view not ready", Toast.LENGTH_SHORT).show()
-                    }
+            PullToRefreshBox(
+                isRefreshing = shoppingUiState.isLoading,
+                onRefresh = { viewModel.onRefresh() },
+                modifier = Modifier.fillMaxSize().padding(paddings)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
 
-                when (shoppingUiState.checkoutStep) {
-                    CheckoutStep.REVIEW_ITEMS -> {
-                        ShoppingMainContent(
-                            shoppingUiState = shoppingUiState,
-                            authOrgUser=authOrgUser,
-                            viewModel = viewModel,
-                            haptic = haptic,
-                            scope = scope,
-                            bottomSheetState = bottomSheetState
-                        )
-                    }
-                    CheckoutStep.CUSTOMER_INFO -> {
-                        CustomerAndPaymentStep(
-                            shoppingUiState = shoppingUiState,
-                            authOrgUser = authOrgUser,
-                            onBack = { viewModel.backToReviewItems() },
-                            onCustomerSelect = { viewModel.selectCustomer(it) },
-                            onClearSelection = {viewModel.clearCustomerSelection()},
-                            onCustomerSearch = { viewModel.updateCustomerSearchQuery(it) },
-                            onCreateNewCustomer = { viewModel.showCreateCustomerForm() },
-                            onCancelCreate = { viewModel.cancelCreateCustomer() },
-                            onNameChange = { viewModel.updateCustomerName(it) },
-                            onPhoneChange = { viewModel.updateCustomerPhone(it) },
-                            onSaveNewCustomer = { viewModel.createNewCustomer() },
-                            onPaymentAmountChange = { viewModel.updatePaymentAmount(it) },
-                            onPaymentBrokerChange = { viewModel.updatePaymentBroker(it) },
-                            onProceedToConfirmation = { viewModel.proceedToConfirmation() },
-                            onDeliverChange = {
-                                viewModel.updateIsDelivered()
-                            }
-                        )
-                    }
-                    CheckoutStep.CONFIRMATION -> {
-                        // Loading state while confirming
-                        if (shoppingUiState.isConfirming) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    CircularProgressIndicator()
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Confirmation de la commande...")
+                    if (authOrgUser.permissions.has(AppPermission.ORDERS_PRINT_BILLING))
+                        shoppingUiState.lastestBilling?.let { billing ->
+                            val billingPdfView = rememberBillPdfView(billing)
+                            billingPdfView?.let {
+                                BillPDFExporter.exportBillToPDF(context, it, billing.billNumber )
+                            } ?: Toast.makeText(context, "Bill view not ready", Toast.LENGTH_SHORT).show()
+                        }
+
+                    when (shoppingUiState.checkoutStep) {
+                        CheckoutStep.REVIEW_ITEMS -> {
+                            ShoppingMainContent(
+                                shoppingUiState = shoppingUiState,
+                                authOrgUser=authOrgUser,
+                                viewModel = viewModel,
+                                haptic = haptic,
+                                scope = scope,
+                                bottomSheetState = bottomSheetState
+                            )
+                        }
+                        CheckoutStep.CUSTOMER_INFO -> {
+                            CustomerAndPaymentStep(
+                                shoppingUiState = shoppingUiState,
+                                authOrgUser = authOrgUser,
+                                onBack = { viewModel.backToReviewItems() },
+                                onCustomerSelect = { viewModel.selectCustomer(it) },
+                                onClearSelection = {viewModel.clearCustomerSelection()},
+                                onCustomerSearch = { viewModel.updateCustomerSearchQuery(it) },
+                                onCreateNewCustomer = { viewModel.showCreateCustomerForm() },
+                                onCancelCreate = { viewModel.cancelCreateCustomer() },
+                                onNameChange = { viewModel.updateCustomerName(it) },
+                                onPhoneChange = { viewModel.updateCustomerPhone(it) },
+                                onSaveNewCustomer = { viewModel.createNewCustomer() },
+                                onPaymentAmountChange = { viewModel.updatePaymentAmount(it) },
+                                onPaymentBrokerChange = { viewModel.updatePaymentBroker(it) },
+                                onProceedToConfirmation = { viewModel.proceedToConfirmation() },
+                                onDeliverChange = {
+                                    viewModel.updateIsDelivered()
+                                }
+                            )
+                        }
+                        CheckoutStep.CONFIRMATION -> {
+                            // Loading state while confirming
+                            if (shoppingUiState.isConfirming) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        CircularProgressIndicator()
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text("Confirmation de la commande...")
+                                    }
                                 }
                             }
                         }
                     }
+
+                    // Notification overlay
+                    NotificationHost(
+                        notificationEvent = notificationState,
+                        onDismiss = { viewModel.clearNotification() },
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+
                 }
-
-                // Notification overlay
-                NotificationHost(
-                    notificationEvent = notificationState,
-                    onDismiss = { viewModel.clearNotification() },
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-
             }
-        }
 
-        // --- Modal Bottom Sheet for Order Verification ---
-        if (bottomSheetState.isVisible && shoppingUiState.checkoutStep == CheckoutStep.REVIEW_ITEMS) {
-            ModalBottomSheet(
-                sheetState = bottomSheetState,
-                onDismissRequest = { scope.launch { bottomSheetState.hide() } }
-            ) {
-                OrderVerificationBottomSheet(
-                    selectedStocks = shoppingUiState.selectedStocks,
-                    authOrgUser=authOrgUser,
-                    totalAmount = shoppingUiState.totalAmount,
-                    onQuantityChange = viewModel::updateQuantity,
-                    onPriceChange = viewModel::updatePrice,
-                    onLockToggle = viewModel::toggleLock,
-                    onRemove = viewModel::removeStock,
-                    onConfirm = { viewModel.proceedToCustomerInfo() } // Go to customer info instead of direct confirm
-                )
+            // --- Modal Bottom Sheet for Order Verification ---
+            if (bottomSheetState.isVisible && shoppingUiState.checkoutStep == CheckoutStep.REVIEW_ITEMS) {
+                ModalBottomSheet(
+                    sheetState = bottomSheetState,
+                    onDismissRequest = { scope.launch { bottomSheetState.hide() } }
+                ) {
+                    OrderVerificationBottomSheet(
+                        selectedStocks = shoppingUiState.selectedStocks,
+                        authOrgUser=authOrgUser,
+                        totalAmount = shoppingUiState.totalAmount,
+                        onQuantityChange = viewModel::updateQuantity,
+                        onPriceChange = viewModel::updatePrice,
+                        onLockToggle = viewModel::toggleLock,
+                        onRemove = viewModel::removeStock,
+                        onConfirm = { viewModel.proceedToCustomerInfo() } // Go to customer info instead of direct confirm
+                    )
+                }
             }
         }
     }
@@ -239,7 +244,7 @@ fun ShoppingScreen(
 @Composable
 fun ShoppingMainContent(
     shoppingUiState: ShoppingUiState,
-    authOrgUser: AuthOrgUser?,
+    authOrgUser: AuthOrgUser,
     viewModel: ShoppingViewModel,
     haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
     scope: CoroutineScope,
