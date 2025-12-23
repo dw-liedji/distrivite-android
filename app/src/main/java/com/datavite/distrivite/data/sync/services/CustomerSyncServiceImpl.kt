@@ -10,6 +10,7 @@ import com.datavite.distrivite.data.mapper.CustomerMapper
 import com.datavite.distrivite.data.remote.datasource.CustomerRemoteDataSource
 import com.datavite.distrivite.data.remote.model.RemoteCustomer
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.data.sync.SyncConfig
 import kotlinx.coroutines.delay
@@ -180,12 +181,19 @@ class CustomerSyncServiceImpl @Inject constructor(
                 else -> {} // ignore other types
             }
 
-            pendingOperationDao.deleteByKeys(
-                entityType = currentOperation.entityType,
-                entityId = currentOperation.entityId,
-                operationType = currentOperation.operationType,
-                orgId = currentOperation.orgId
-            )
+            when(currentOperation.operationScope){
+                OperationScope.STATE -> {
+                    pendingOperationDao.deleteByKeys(
+                        entityType = currentOperation.entityType,
+                        entityId = currentOperation.entityId,
+                        operationType = currentOperation.operationType,
+                        orgId = currentOperation.orgId
+                    )
+                }
+                OperationScope.EVENT -> {
+                    pendingOperationDao.deleteById(currentOperation.id)
+                }
+            }
 
             val newStatus = if ((totalPending - 1) > 0) SyncStatus.PENDING else SyncStatus.SYNCED
             localDataSource.updateSyncStatus(currentOperation.entityId, newStatus)

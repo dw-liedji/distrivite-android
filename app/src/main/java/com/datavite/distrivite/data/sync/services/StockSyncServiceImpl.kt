@@ -10,6 +10,7 @@ import com.datavite.distrivite.data.mapper.StockMapper
 import com.datavite.distrivite.data.remote.datasource.StockRemoteDataSource
 import com.datavite.distrivite.data.remote.model.RemoteStock
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.data.sync.SyncConfig
 import com.datavite.distrivite.domain.notification.NotificationEvent
@@ -204,12 +205,19 @@ class StockSyncServiceImpl @Inject constructor(
                 else -> {} // ignore other types
             }
 
-            pendingOperationDao.deleteByKeys(
-                entityType = currentOperation.entityType,
-                entityId = currentOperation.entityId,
-                operationType = currentOperation.operationType,
-                orgId = currentOperation.orgId
-            )
+            when(currentOperation.operationScope){
+                OperationScope.STATE -> {
+                    pendingOperationDao.deleteByKeys(
+                        entityType = currentOperation.entityType,
+                        entityId = currentOperation.entityId,
+                        operationType = currentOperation.operationType,
+                        orgId = currentOperation.orgId
+                    )
+                }
+                OperationScope.EVENT -> {
+                    pendingOperationDao.deleteById(currentOperation.id)
+                }
+            }
 
             val newStatus = if ((totalPending - 1) > 0) SyncStatus.PENDING else SyncStatus.SYNCED
             localDataSource.updateSyncStatus(currentOperation.entityId, newStatus)

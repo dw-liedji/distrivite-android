@@ -10,6 +10,7 @@ import com.datavite.distrivite.data.mapper.TransactionMapper
 import com.datavite.distrivite.data.remote.datasource.TransactionRemoteDataSource
 import com.datavite.distrivite.data.remote.model.RemoteTransaction
 import com.datavite.distrivite.data.sync.EntityType
+import com.datavite.distrivite.data.sync.OperationScope
 import com.datavite.distrivite.data.sync.OperationType
 import com.datavite.distrivite.data.sync.SyncConfig
 import kotlinx.coroutines.delay
@@ -27,7 +28,7 @@ class TransactionSyncServiceImpl @Inject constructor(
 ) : TransactionSyncService {
 
     // --- Push CREATE ---
-    private suspend fun pushCreatedTransaction(remoteTransaction: RemoteTransaction) {
+    private suspend fun pushCreatedTransaction(remoteTransaction: RemoteTransaction, currentOperation: PendingOperation) {
         try {
             remoteDataSource.createRemoteTransaction(remoteTransaction.orgSlug, remoteTransaction)
             val updatedDomain = transactionMapper.mapRemoteToDomain(remoteTransaction)
@@ -36,13 +37,13 @@ class TransactionSyncServiceImpl @Inject constructor(
             localDataSource.insertLocalTransaction(localEntity)
             Log.i("TransactionSync", "Successfully synced created transaction ${remoteTransaction.id}")
         } catch (e: Exception) {
-            handleTransactionSyncException(e, remoteTransaction.id, "CREATE")
-            throw e
+            val handled = handleTransactionSyncException(e, remoteTransaction.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Push UPDATE ---
-    private suspend fun pushUpdatedTransaction(remoteTransaction: RemoteTransaction) {
+    private suspend fun pushUpdatedTransaction(remoteTransaction: RemoteTransaction, currentOperation: PendingOperation) {
         try {
             remoteDataSource.updateRemoteTransaction(remoteTransaction.orgSlug, remoteTransaction)
             val updatedDomain = transactionMapper.mapRemoteToDomain(remoteTransaction)
@@ -51,110 +52,158 @@ class TransactionSyncServiceImpl @Inject constructor(
             localDataSource.insertLocalTransaction(localEntity)
             Log.i("TransactionSync", "Successfully synced updated transaction ${remoteTransaction.id}")
         } catch (e: Exception) {
-            handleTransactionSyncException(e, remoteTransaction.id, "UPDATE")
-            throw e
+            val handled = handleTransactionSyncException(e, remoteTransaction.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Push DELETE ---
-    private suspend fun pushDeletedTransaction(remoteTransaction: RemoteTransaction) {
+    private suspend fun pushDeletedTransaction(remoteTransaction: RemoteTransaction, currentOperation: PendingOperation) {
         try {
             remoteDataSource.deleteRemoteTransaction(remoteTransaction.orgSlug, remoteTransaction.id)
             Log.i("TransactionSync", "Successfully synced deleted transaction ${remoteTransaction.id}")
         } catch (e: Exception) {
-            handleTransactionSyncException(e, remoteTransaction.id, "DELETE")
-            throw e
+            val handled = handleTransactionSyncException(e, remoteTransaction.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Comprehensive Exception Handling ---
-    private suspend fun handleTransactionSyncException(e: Exception, transactionId: String, operation: String) {
-        when (e) {
+    private suspend fun handleTransactionSyncException(e: Exception, transactionId: String, currentOperation: PendingOperation): Boolean {
+        return when (e) {
             is HttpException -> {
                 when (e.code()) {
-                    HTTP_NOT_FOUND -> handleNotFound(transactionId, operation)
-                    HTTP_CONFLICT -> handleConflict(transactionId, operation)
-                    HTTP_UNAVAILABLE -> handleServiceUnavailable(transactionId, operation)
-                    HTTP_INTERNAL_ERROR -> handleServerError(transactionId, operation)
-                    HTTP_BAD_REQUEST -> handleBadRequest(transactionId, operation)
-                    HTTP_UNAUTHORIZED -> handleUnauthorized(transactionId, operation)
-                    HTTP_FORBIDDEN -> handleForbidden(transactionId, operation)
-                    HTTP_BAD_GATEWAY -> handleBadGateway(transactionId, operation)
-                    HTTP_GATEWAY_TIMEOUT -> handleGatewayTimeout(transactionId, operation)
-                    in 400..499 -> handleClientError(transactionId, operation, e.code())
-                    in 500..599 -> handleServerError(transactionId, operation, e.code())
-                    else -> handleGenericHttpError(transactionId, operation, e.code())
+                    HTTP_NOT_FOUND -> handleNotFound(transactionId, currentOperation)
+                    HTTP_CONFLICT -> handleConflict(transactionId, currentOperation)
+                    HTTP_UNAVAILABLE -> handleServiceUnavailable(transactionId, currentOperation)
+                    HTTP_INTERNAL_ERROR -> handleServerError(transactionId, currentOperation)
+                    HTTP_BAD_REQUEST -> handleBadRequest(transactionId, currentOperation)
+                    HTTP_UNAUTHORIZED -> handleUnauthorized(transactionId, currentOperation)
+                    HTTP_FORBIDDEN -> handleForbidden(transactionId, currentOperation)
+                    HTTP_BAD_GATEWAY -> handleBadGateway(transactionId, currentOperation)
+                    HTTP_GATEWAY_TIMEOUT -> handleGatewayTimeout(transactionId, currentOperation)
+                    in 400..499 -> handleClientError(transactionId, currentOperation, e.code())
+                    in 500..599 -> handleServerError(transactionId, currentOperation, e.code())
+                    else -> handleGenericHttpError(transactionId, currentOperation, e.code())
                 }
             }
-            is IOException -> handleNetworkError(transactionId, operation, e)
-            else -> handleUnknownError(transactionId, operation, e)
+            is IOException -> handleNetworkError(transactionId, currentOperation, e)
+            else -> handleUnknownError(transactionId, currentOperation, e)
         }
     }
 
     // --- HTTP Status Code Handlers ---
-    private suspend fun handleNotFound(transactionId: String, operation: String) {
-        Log.i("TransactionSync", "Transaction $transactionId not found during $operation - removing locally")
-        handleDeletedTransaction(transactionId, operation)
+    private suspend fun handleNotFound(transactionId: String, operation: PendingOperation): Boolean {
+        Log.i("TransactionSync", "Transaction $transactionId not found during ${operation.operationType} - removing locally")
+        return try {
+            localDataSource.deleteLocalTransactionById(transactionId)
+            Log.i("TransactionSync", "Transaction $transactionId was deleted on server, removed locally")
+            true  // Exception handled successfully
+        } catch (e: Exception) {
+            Log.e("TransactionSync", "Failed to clean up locally deleted transaction $transactionId", e)
+            false  // Exception not fully handled
+        }
     }
 
-    private fun handleConflict(transactionId: String, operation: String) {
-        Log.w("TransactionSync", "Conflict detected for transaction $transactionId during $operation - requires resolution")
+    private suspend fun handleConflict(transactionId: String, operation: PendingOperation): Boolean {
+        Log.w("TransactionSync", "Conflict detected for transaction $transactionId during ${operation.operationType} - resolving...")
+
+        return when (operation.operationType) {
+            OperationType.CREATE -> resolveCreateConflict(transactionId, operation)
+            OperationType.UPDATE -> resolveUpdateConflict(transactionId, operation)
+            OperationType.DELETE -> resolveDeleteConflict(transactionId, operation)
+            else -> {
+                Log.w("TransactionSync", "Unhandled conflict type for ${operation.operationType}")
+                false
+            }
+        }
     }
 
-    private fun handleServiceUnavailable(transactionId: String, operation: String) {
-        Log.w("TransactionSync", "Service unavailable for transaction $transactionId during $operation - retry later")
+    private suspend fun resolveCreateConflict(transactionId: String, operation: PendingOperation): Boolean {
+        try {
+            // For CREATE conflict, transaction already exists on server
+            // Mark as synced since the data is already on the server
+            localDataSource.updateSyncStatus(operation.entityId, SyncStatus.SYNCED)
+            Log.w("TransactionSync", "CREATE conflict resolved for $transactionId - marked as synced")
+            return true
+        } catch (e: Exception) {
+            Log.e("TransactionSync", "Failed to resolve CREATE conflict for $transactionId", e)
+            return false
+        }
     }
 
-    private fun handleServerError(transactionId: String, operation: String, statusCode: Int? = null) {
+    private suspend fun resolveUpdateConflict(transactionId: String, operation: PendingOperation): Boolean {
+        Log.w("TransactionSync", "UPDATE conflict for $transactionId - keeping as pending for retry")
+        return false  // Not handled, will retry
+    }
+
+    private suspend fun resolveDeleteConflict(transactionId: String, operation: PendingOperation): Boolean {
+        try {
+            // For DELETE conflict, item might already be deleted
+            localDataSource.deleteLocalTransactionById(transactionId)
+            Log.i("TransactionSync", "DELETE conflict resolved for $transactionId - removed locally")
+            return true
+        } catch (e: Exception) {
+            Log.e("TransactionSync", "Failed to resolve DELETE conflict for $transactionId", e)
+            return false
+        }
+    }
+
+    private fun handleServiceUnavailable(transactionId: String, operation: PendingOperation): Boolean {
+        Log.w("TransactionSync", "Service unavailable for transaction $transactionId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
+    }
+
+    private fun handleServerError(transactionId: String, operation: PendingOperation, statusCode: Int? = null): Boolean {
         val codeInfo = if (statusCode != null) " (code: $statusCode)" else ""
-        Log.e("TransactionSync", "Server error for transaction $transactionId during $operation$codeInfo")
+        Log.e("TransactionSync", "Server error for transaction $transactionId during ${operation.operationType}$codeInfo")
+        return false  // Not handled, will retry
     }
 
-    private fun handleBadRequest(transactionId: String, operation: String) {
-        Log.e("TransactionSync", "Bad request for transaction $transactionId during $operation - check data format")
+    private fun handleBadRequest(transactionId: String, operation: PendingOperation): Boolean {
+        Log.e("TransactionSync", "Bad request for transaction $transactionId during ${operation.operationType} - check data format")
+        return true  // Handled - bad request won't succeed on retry
     }
 
-    private fun handleUnauthorized(transactionId: String, operation: String) {
-        Log.e("TransactionSync", "Unauthorized for transaction $transactionId during $operation - authentication required")
+    private fun handleUnauthorized(transactionId: String, operation: PendingOperation): Boolean {
+        Log.e("TransactionSync", "Unauthorized for transaction $transactionId during ${operation.operationType} - authentication required")
+        return true  // Handled - auth error needs user intervention
     }
 
-    private fun handleForbidden(transactionId: String, operation: String) {
-        Log.e("TransactionSync", "Forbidden for transaction $transactionId during $operation - insufficient permissions")
+    private fun handleForbidden(transactionId: String, operation: PendingOperation): Boolean {
+        Log.e("TransactionSync", "Forbidden for transaction $transactionId during ${operation.operationType} - insufficient permissions")
+        return true  // Handled - permission error won't succeed on retry
     }
 
-    private fun handleBadGateway(transactionId: String, operation: String) {
-        Log.w("TransactionSync", "Bad gateway for transaction $transactionId during $operation - retry later")
+    private fun handleBadGateway(transactionId: String, operation: PendingOperation): Boolean {
+        Log.w("TransactionSync", "Bad gateway for transaction $transactionId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
     }
 
-    private fun handleGatewayTimeout(transactionId: String, operation: String) {
-        Log.w("TransactionSync", "Gateway timeout for transaction $transactionId during $operation - retry later")
+    private fun handleGatewayTimeout(transactionId: String, operation: PendingOperation): Boolean {
+        Log.w("TransactionSync", "Gateway timeout for transaction $transactionId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
     }
 
-    private fun handleClientError(transactionId: String, operation: String, statusCode: Int) {
-        Log.e("TransactionSync", "Client error $statusCode for transaction $transactionId during $operation")
+    private fun handleClientError(transactionId: String, operation: PendingOperation, statusCode: Int): Boolean {
+        Log.e("TransactionSync", "Client error $statusCode for transaction $transactionId during ${operation.operationType}")
+        return true  // Handled - client errors won't succeed on retry without fixing
     }
 
-    private fun handleGenericHttpError(transactionId: String, operation: String, statusCode: Int) {
-        Log.e("TransactionSync", "HTTP error $statusCode for transaction $transactionId during $operation")
+    private fun handleGenericHttpError(transactionId: String, operation: PendingOperation, statusCode: Int): Boolean {
+        Log.e("TransactionSync", "HTTP error $statusCode for transaction $transactionId during ${operation.operationType}")
+        return false  // Not handled, generic case
     }
 
     // --- Network and Generic Error Handlers ---
-    private fun handleNetworkError(transactionId: String, operation: String, e: IOException) {
-        Log.w("TransactionSync", "Network error for transaction $transactionId during $operation: ${e.message}")
+    private fun handleNetworkError(transactionId: String, operation: PendingOperation, e: IOException): Boolean {
+        Log.w("TransactionSync", "Network error for transaction $transactionId during ${operation.operationType}: ${e.message}")
+        return false  // Not handled, will retry
     }
 
-    private fun handleUnknownError(transactionId: String, operation: String, e: Exception) {
-        Log.e("TransactionSync", "Unknown error for transaction $transactionId during $operation: ${e.message}", e)
-    }
-
-    // --- Handle deleted transaction (404 scenario) ---
-    private suspend fun handleDeletedTransaction(transactionId: String, operationType: String) {
-        try {
-            localDataSource.deleteLocalTransactionById(transactionId)
-            Log.i("TransactionSync", "Transaction $transactionId was deleted on server during $operationType, removed locally")
-        } catch (e: Exception) {
-            Log.e("TransactionSync", "Failed to clean up locally deleted transaction $transactionId", e)
-        }
+    private fun handleUnknownError(transactionId: String, operation: PendingOperation, e: Exception): Boolean {
+        Log.e("TransactionSync", "Unknown error for transaction $transactionId during ${operation.operationType}: ${e.message}", e)
+        return false  // Not handled
     }
 
     // --- Push pending operations ---
@@ -174,44 +223,74 @@ class TransactionSyncServiceImpl @Inject constructor(
 
         try {
             when (currentOperation.operationType) {
-                OperationType.CREATE -> pushCreatedTransaction(transaction)
-                OperationType.UPDATE -> pushUpdatedTransaction(transaction)
-                OperationType.DELETE -> pushDeletedTransaction(transaction)
+                OperationType.CREATE -> pushCreatedTransaction(transaction, currentOperation)
+                OperationType.UPDATE -> pushUpdatedTransaction(transaction, currentOperation)
+                OperationType.DELETE -> pushDeletedTransaction(transaction, currentOperation)
                 else -> {} // ignore other types
             }
 
-            pendingOperationDao.deleteByKeys(
+            // If we get here without throwing, operation succeeded
+            when(currentOperation.operationScope){
+                OperationScope.STATE -> {
+                    pendingOperationDao.deleteByKeys(
+                        entityType = currentOperation.entityType,
+                        entityId = currentOperation.entityId,
+                        operationType = currentOperation.operationType,
+                        orgId = currentOperation.orgId
+                    )
+                }
+                OperationScope.EVENT -> {
+                    pendingOperationDao.deleteById(currentOperation.id)
+                }
+            }
+
+            updateFinalStatus(currentOperation.entityId)
+
+        } catch (e: Exception) {
+            // Exception was either not handled or handler said to rethrow
+            handleSyncFailure(currentOperation, e)
+        }
+    }
+
+    private suspend fun updateFinalStatus(entityId: String) {
+        val remaining = pendingOperationDao.countForEntity(entityId)
+        val status = if (remaining > 0) SyncStatus.PENDING else SyncStatus.SYNCED
+        localDataSource.updateSyncStatus(entityId, status)
+    }
+
+    private suspend fun handleSyncFailure(currentOperation: PendingOperation, e: Exception) {
+        val isNotFoundError = e is HttpException && e.code() == HTTP_NOT_FOUND
+        val isHandledError = when {
+            isNotFoundError -> true  // Already handled in handleNotFound()
+            e is HttpException && e.code() == HTTP_CONFLICT -> {
+                // Check if conflict was handled
+                when (currentOperation.operationType) {
+                    OperationType.CREATE, OperationType.DELETE -> true  // Handled in resolve methods
+                    else -> false  // UPDATE conflict not handled
+                }
+            }
+            else -> false
+        }
+
+        if (!isHandledError) {
+            pendingOperationDao.incrementFailureCount(
                 entityType = currentOperation.entityType,
                 entityId = currentOperation.entityId,
                 operationType = currentOperation.operationType,
                 orgId = currentOperation.orgId
             )
 
-            val newStatus = if ((totalPending - 1) > 0) SyncStatus.PENDING else SyncStatus.SYNCED
-            localDataSource.updateSyncStatus(currentOperation.entityId, newStatus)
+            val failureCount = pendingOperationDao.getFailureCount(
+                entityType = currentOperation.entityType,
+                entityId = currentOperation.entityId,
+                operationType = currentOperation.operationType,
+                orgId = currentOperation.orgId
+            )
 
-        } catch (e: Exception) {
-            val isNotFoundError = e is HttpException && e.code() == HTTP_NOT_FOUND
-            if (!isNotFoundError) {
-                pendingOperationDao.incrementFailureCount(
-                    entityType = currentOperation.entityType,
-                    entityId = currentOperation.entityId,
-                    operationType = currentOperation.operationType,
-                    orgId = currentOperation.orgId
-                )
-                val failureCount = pendingOperationDao.getFailureCount(
-                    entityType = currentOperation.entityType,
-                    entityId = currentOperation.entityId,
-                    operationType = currentOperation.operationType,
-                    orgId = currentOperation.orgId
-                )
-                val status = if (failureCount > 5) SyncStatus.FAILED else SyncStatus.PENDING
-                localDataSource.updateSyncStatus(currentOperation.entityId, status)
-            }
+            val status = if (failureCount > 5) SyncStatus.FAILED else SyncStatus.PENDING
+            localDataSource.updateSyncStatus(currentOperation.entityId, status)
 
-            if (!isNotFoundError) {
-                Log.e("TransactionSyncOperation", "Failed operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}", e)
-            }
+            Log.e("TransactionSyncOperation", "Failed operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}", e)
         }
     }
 

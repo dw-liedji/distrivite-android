@@ -74,6 +74,18 @@ interface PendingOperationDao {
         operationType: OperationType
     )
 
+
+    @Query("""
+        DELETE FROM pending_operations 
+        WHERE id = :operationId
+    """)
+    suspend fun deleteById(
+        operationId: Long,
+    )
+
+
+
+
     // 🔥 Increment failure count
     @Query("""
         UPDATE pending_operations
@@ -108,6 +120,9 @@ interface PendingOperationDao {
     // 🔥 Monitoring flows
     @Query("SELECT COUNT(*) FROM pending_operations")
     fun getPendingCountFlow(): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM pending_operations WHERE entityId = :entityId")
+    fun countForEntity(entityId: String): Int
 
     @Query("SELECT * FROM pending_operations ORDER BY createdAt ASC")
     fun getAllPendingOperationsFlow(): Flow<List<PendingOperation>>
