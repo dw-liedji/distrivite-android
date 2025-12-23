@@ -165,7 +165,7 @@ fun BillingScreen(
                         },
                         onAddItem = {},
                         onEditItem = {viewModel.showEditItemDialog(it)},
-                        onDeleteItem = {},
+                        onDeleteItem = {viewModel.onDeleteItem(it)},
                         onAddPayment = { viewModel.showAddPaymentDialog() }, // Changed to dialog
                         onEditPayment = {viewModel.showEditPaymentDialog(it)},
                         onDeletePayment = { viewModel.deletePayment(it) },

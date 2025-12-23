@@ -261,6 +261,34 @@ class BillingViewModel @Inject constructor(
         }
     }
 
+    fun onDeleteItem(domainBillingItem: DomainBillingItem) {
+        val selectedBilling = _billingUiState.value.selectedBilling ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val updatedBilling = selectedBilling.copy(
+                    items = selectedBilling.items.filter { it.id != domainBillingItem.id }
+                )
+
+                billingRepository.updateBilling(updatedBilling)
+
+                val domainStock = stockRepository.getDomainStockById(domainBillingItem.stockId)
+                if (domainStock != null) {
+                    stockRepository.updateStockQuantity(domainStock, domainBillingItem.quantity)
+                }
+
+                _billingUiState.update { it.copy(selectedBilling = updatedBilling) }
+                showInfoMessage("${domainBillingItem.stockName} deleted successfully")
+
+                // Sync with server
+                authOrgUser.value?.orgSlug?.let { syncOrchestrator.push(it) }
+
+            } catch (e: Exception) {
+                showErrorMessage("Failed to delete ${domainBillingItem.stockName} : ${e.message}")
+            }
+        }
+    }
+
     fun dismissItemDialog() {
         // Update item logic
         _billingUiState.update { it.copy(selectedItemToEdit = null) }
