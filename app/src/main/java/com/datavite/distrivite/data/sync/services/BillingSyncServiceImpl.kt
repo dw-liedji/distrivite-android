@@ -16,15 +16,8 @@ import com.datavite.distrivite.data.sync.SyncConfig
 import kotlinx.coroutines.delay
 import retrofit2.HttpException
 import java.io.IOException
-import java.net.HttpURLConnection.HTTP_BAD_GATEWAY
-import java.net.HttpURLConnection.HTTP_BAD_REQUEST
-import java.net.HttpURLConnection.HTTP_CONFLICT
-import java.net.HttpURLConnection.HTTP_FORBIDDEN
-import java.net.HttpURLConnection.HTTP_GATEWAY_TIMEOUT
-import java.net.HttpURLConnection.HTTP_INTERNAL_ERROR
-import java.net.HttpURLConnection.HTTP_NOT_FOUND
-import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
-import java.net.HttpURLConnection.HTTP_UNAVAILABLE
+import java.net.HttpURLConnection.*
+
 import javax.inject.Inject
 
 class BillingSyncServiceImpl @Inject constructor(
@@ -36,23 +29,22 @@ class BillingSyncServiceImpl @Inject constructor(
 ) : BillingSyncService {
 
     // --- Push CREATE ---
-    private suspend fun pushCreatedBilling(remoteBilling: RemoteBilling) {
+    private suspend fun pushCreatedBilling(remoteBilling: RemoteBilling, currentOperation: PendingOperation) {
         try {
             remoteDataSource.createRemoteBilling(remoteBilling.orgSlug, remoteBilling)
             val updatedDomain = billingMapper.mapRemoteToDomain(remoteBilling)
             val entities = billingMapper.mapDomainToLocalBillingWithItemsAndPaymentsRelation(updatedDomain)
 
-            // Save parent + children
             localDataSource.insertLocalBillingWithItemsAndPaymentsRelation(entities)
             Log.i("BillingSync", "Successfully synced created billing ${remoteBilling.id}")
         } catch (e: Exception) {
-            handleBillingSyncException(e, remoteBilling.id, "CREATE")
-            throw e
+            val handled = handleBillingSyncException(e, remoteBilling.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Push UPDATE ---
-    private suspend fun pushUpdatedBilling(remoteBilling: RemoteBilling) {
+    private suspend fun pushUpdatedBilling(remoteBilling: RemoteBilling, currentOperation: PendingOperation) {
         try {
             remoteDataSource.updateRemoteBilling(remoteBilling.orgSlug, remoteBilling)
             val updatedDomain = billingMapper.mapRemoteToDomain(remoteBilling)
@@ -61,147 +53,177 @@ class BillingSyncServiceImpl @Inject constructor(
             localDataSource.insertLocalBillingWithItemsAndPaymentsRelation(entities)
             Log.i("BillingSync", "Successfully synced updated billing ${remoteBilling.id}")
         } catch (e: Exception) {
-            handleBillingSyncException(e, remoteBilling.id, "UPDATE")
-            throw e
+            val handled = handleBillingSyncException(e, remoteBilling.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
-    private suspend fun pushDeliveredBilling(remoteBilling: RemoteBilling) {
+    private suspend fun pushDeliveredBilling(remoteBilling: RemoteBilling, currentOperation: PendingOperation) {
         try {
             remoteDataSource.deliverRemoteBilling(remoteBilling.orgSlug, remoteBilling)
             val updatedDomain = billingMapper.mapRemoteToDomain(remoteBilling)
             val entities = billingMapper.mapDomainToLocalBillingWithItemsAndPaymentsRelation(updatedDomain)
 
             localDataSource.insertLocalBillingWithItemsAndPaymentsRelation(entities)
-            Log.i("BillingSync", "Successfully synced updated billing ${remoteBilling.id}")
+            Log.i("BillingSync", "Successfully delivered billing ${remoteBilling.id}")
         } catch (e: Exception) {
-            handleBillingSyncException(e, remoteBilling.id, "UPDATE")
-            throw e
+            val handled = handleBillingSyncException(e, remoteBilling.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Push DELETE ---
-    private suspend fun pushDeletedBilling(remoteBilling: RemoteBilling) {
+    private suspend fun pushDeletedBilling(remoteBilling: RemoteBilling, currentOperation: PendingOperation) {
         try {
             remoteDataSource.deleteRemoteBilling(remoteBilling.orgSlug, remoteBilling.id)
             Log.i("BillingSync", "Successfully synced deleted billing ${remoteBilling.id}")
         } catch (e: Exception) {
-            handleBillingSyncException(e, remoteBilling.id, "DELETE")
-            throw e
+            val handled = handleBillingSyncException(e, remoteBilling.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Comprehensive Exception Handling ---
-    private suspend fun handleBillingSyncException(e: Exception, billingId: String, operation: String) {
-        when (e) {
+    private suspend fun handleBillingSyncException(e: Exception, billingId: String, currentOperation: PendingOperation): Boolean {
+        return when (e) {
             is HttpException -> {
                 when (e.code()) {
-                    HTTP_NOT_FOUND -> handleNotFound(billingId, operation)
-                    HTTP_CONFLICT -> handleConflict(billingId, operation)
-                    HTTP_UNAVAILABLE -> handleServiceUnavailable(billingId, operation)
-                    HTTP_INTERNAL_ERROR -> handleServerError(billingId, operation)
-                    HTTP_BAD_REQUEST -> handleBadRequest(billingId, operation)
-                    HTTP_UNAUTHORIZED -> handleUnauthorized(billingId, operation)
-                    HTTP_FORBIDDEN -> handleForbidden(billingId, operation)
-                    HTTP_BAD_GATEWAY -> handleBadGateway(billingId, operation)
-                    HTTP_GATEWAY_TIMEOUT -> handleGatewayTimeout(billingId, operation)
-                    in 400..499 -> handleClientError(billingId, operation, e.code())
-                    in 500..599 -> handleServerError(billingId, operation, e.code())
-                    else -> handleGenericHttpError(billingId, operation, e.code())
+                    HTTP_NOT_FOUND -> handleNotFound(billingId, currentOperation)
+                    HTTP_CONFLICT -> handleConflict(billingId, currentOperation)
+                    HTTP_UNAVAILABLE -> handleServiceUnavailable(billingId, currentOperation)
+                    HTTP_INTERNAL_ERROR -> handleServerError(billingId, currentOperation)
+                    HTTP_BAD_REQUEST -> handleBadRequest(billingId, currentOperation)
+                    HTTP_UNAUTHORIZED -> handleUnauthorized(billingId, currentOperation)
+                    HTTP_FORBIDDEN -> handleForbidden(billingId, currentOperation)
+                    HTTP_BAD_GATEWAY -> handleBadGateway(billingId, currentOperation)
+                    HTTP_GATEWAY_TIMEOUT -> handleGatewayTimeout(billingId, currentOperation)
+                    in 400..499 -> handleClientError(billingId, currentOperation, e.code())
+                    in 500..599 -> handleServerError(billingId, currentOperation, e.code())
+                    else -> handleGenericHttpError(billingId, currentOperation, e.code())
                 }
             }
-            is IOException -> handleNetworkError(billingId, operation, e)
-            else -> handleUnknownError(billingId, operation, e)
+            is IOException -> handleNetworkError(billingId, currentOperation, e)
+            else -> handleUnknownError(billingId, currentOperation, e)
         }
     }
 
     // --- HTTP Status Code Handlers ---
-    private suspend fun handleNotFound(billingId: String, operation: String) {
-        Log.i("BillingSync", "Billing $billingId not found during $operation - removing locally")
-        // Object deleted on server - remove locally
-        handleDeletedBilling(billingId, operation)
+    private suspend fun handleNotFound(billingId: String, operation: PendingOperation): Boolean {
+        Log.i("BillingSync", "Billing $billingId not found during ${operation.operationType} - removing locally")
+        return try {
+            localDataSource.deleteLocalBillingById(billingId)
+            Log.i("BillingSync", "Billing $billingId was deleted on server, removed locally")
+            true  // Exception handled successfully
+        } catch (e: Exception) {
+            Log.e("BillingSync", "Failed to clean up locally deleted billing $billingId", e)
+            false  // Exception not fully handled
+        }
     }
 
-    private fun handleConflict(billingId: String, operation: String) {
-        Log.w("BillingSync", "Conflict detected for billing $billingId during $operation - requires resolution")
-        // TODO: Implement conflict resolution logic
-        // This could trigger a manual merge or use last-write-wins strategy
+    private suspend fun handleConflict(billingId: String, operation: PendingOperation): Boolean {
+        Log.w("BillingSync", "Conflict detected for billing $billingId during ${operation.operationType} - resolving...")
+
+        return when (operation.operationType) {
+            OperationType.CREATE -> resolveCreateConflict(billingId, operation)
+            OperationType.UPDATE -> resolveUpdateConflict(billingId, operation)
+            OperationType.DELIVER_ORDER -> resolveDeliverConflict(billingId, operation)
+            OperationType.DELETE -> resolveDeleteConflict(billingId, operation)
+            else -> {
+                Log.w("BillingSync", "Unhandled conflict type for ${operation.operationType}")
+                false
+            }
+        }
     }
 
-    private fun handleServiceUnavailable(billingId: String, operation: String) {
-        Log.w("BillingSync", "Service unavailable for billing $billingId during $operation - retry later")
-        // Server is down - will retry on next sync cycle
+    private suspend fun resolveCreateConflict(billingId: String, operation: PendingOperation): Boolean {
+        try {
+            // For CREATE conflict, billing already exists on server
+            localDataSource.updateSyncStatus(operation.entityId, SyncStatus.SYNCED)
+            Log.w("BillingSync", "CREATE conflict resolved for $billingId - marked as synced")
+            return true
+        } catch (e: Exception) {
+            Log.e("BillingSync", "Failed to resolve CREATE conflict for $billingId", e)
+            return false
+        }
     }
 
-    private fun handleServerError(billingId: String, operation: String, statusCode: Int? = null) {
+    private suspend fun resolveUpdateConflict(billingId: String, operation: PendingOperation): Boolean {
+        Log.w("BillingSync", "UPDATE conflict for $billingId - keeping as pending for retry")
+        return false  // Not handled, will retry
+    }
+
+    private suspend fun resolveDeliverConflict(billingId: String, operation: PendingOperation): Boolean {
+        Log.w("BillingSync", "DELIVER_ORDER conflict for $billingId - keeping as pending for retry")
+        return false  // Not handled, will retry
+    }
+
+    private suspend fun resolveDeleteConflict(billingId: String, operation: PendingOperation): Boolean {
+        try {
+            // For DELETE conflict, item might already be deleted
+            localDataSource.deleteLocalBillingById(billingId)
+            Log.i("BillingSync", "DELETE conflict resolved for $billingId - removed locally")
+            return true
+        } catch (e: Exception) {
+            Log.e("BillingSync", "Failed to resolve DELETE conflict for $billingId", e)
+            return false
+        }
+    }
+
+    private fun handleServiceUnavailable(billingId: String, operation: PendingOperation): Boolean {
+        Log.w("BillingSync", "Service unavailable for billing $billingId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
+    }
+
+    private fun handleServerError(billingId: String, operation: PendingOperation, statusCode: Int? = null): Boolean {
         val codeInfo = if (statusCode != null) " (code: $statusCode)" else ""
-        Log.e("BillingSync", "Server error for billing $billingId during $operation$codeInfo")
-        // Internal server error - retry with exponential backoff
+        Log.e("BillingSync", "Server error for billing $billingId during ${operation.operationType}$codeInfo")
+        return false  // Not handled, will retry
     }
 
-    private fun handleBadRequest(billingId: String, operation: String) {
-        Log.e("BillingSync", "Bad request for billing $billingId during $operation - check data format")
-        // Invalid request - likely data format issue
+    private fun handleBadRequest(billingId: String, operation: PendingOperation): Boolean {
+        Log.e("BillingSync", "Bad request for billing $billingId during ${operation.operationType} - check data format")
+        return true  // Handled - bad request won't succeed on retry
     }
 
-    private fun handleUnauthorized(billingId: String, operation: String) {
-        Log.e("BillingSync", "Unauthorized for billing $billingId during $operation - authentication required")
-        // Token expired or invalid - trigger reauthentication
-        // eventBus.post(AuthenticationRequiredEvent())
+    private fun handleUnauthorized(billingId: String, operation: PendingOperation): Boolean {
+        Log.e("BillingSync", "Unauthorized for billing $billingId during ${operation.operationType} - authentication required")
+        return true  // Handled - auth error needs user intervention
     }
 
-    private fun handleForbidden(billingId: String, operation: String) {
-        Log.e("BillingSync", "Forbidden for billing $billingId during $operation - insufficient permissions")
-        // User doesn't have permission - should not retry
+    private fun handleForbidden(billingId: String, operation: PendingOperation): Boolean {
+        Log.e("BillingSync", "Forbidden for billing $billingId during ${operation.operationType} - insufficient permissions")
+        return true  // Handled - permission error won't succeed on retry
     }
 
-    private fun handleBadGateway(billingId: String, operation: String) {
-        Log.w("BillingSync", "Bad gateway for billing $billingId during $operation - retry later")
-        // Proxy/gateway issue - retry with backoff
+    private fun handleBadGateway(billingId: String, operation: PendingOperation): Boolean {
+        Log.w("BillingSync", "Bad gateway for billing $billingId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
     }
 
-    private fun handleGatewayTimeout(billingId: String, operation: String) {
-        Log.w("BillingSync", "Gateway timeout for billing $billingId during $operation - retry later")
-        // Gateway timeout - retry with backoff
+    private fun handleGatewayTimeout(billingId: String, operation: PendingOperation): Boolean {
+        Log.w("BillingSync", "Gateway timeout for billing $billingId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
     }
 
-    private fun handleClientError(billingId: String, operation: String, statusCode: Int) {
-        Log.e("BillingSync", "Client error $statusCode for billing $billingId during $operation")
-        // Other 4xx errors - likely client-side issue
+    private fun handleClientError(billingId: String, operation: PendingOperation, statusCode: Int): Boolean {
+        Log.e("BillingSync", "Client error $statusCode for billing $billingId during ${operation.operationType}")
+        return true  // Handled - client errors won't succeed on retry without fixing
     }
 
-    private fun handleGenericHttpError(billingId: String, operation: String, statusCode: Int) {
-        Log.e("BillingSync", "HTTP error $statusCode for billing $billingId during $operation")
-        // Unhandled HTTP status code
+    private fun handleGenericHttpError(billingId: String, operation: PendingOperation, statusCode: Int): Boolean {
+        Log.e("BillingSync", "HTTP error $statusCode for billing $billingId during ${operation.operationType}")
+        return false  // Not handled, generic case
     }
 
     // --- Network and Generic Error Handlers ---
-    private fun handleNetworkError(billingId: String, operation: String, e: IOException) {
-        Log.w("BillingSync", "Network error for billing $billingId during $operation: ${e.message}")
-        // Network connectivity issue - will retry when connection restored
+    private fun handleNetworkError(billingId: String, operation: PendingOperation, e: IOException): Boolean {
+        Log.w("BillingSync", "Network error for billing $billingId during ${operation.operationType}: ${e.message}")
+        return false  // Not handled, will retry
     }
 
-    private fun handleUnknownError(billingId: String, operation: String, e: Exception) {
-        Log.e("BillingSync", "Unknown error for billing $billingId during $operation: ${e.message}", e)
-        // Unexpected error - log for debugging
-    }
-
-    // --- Handle deleted billing (404 scenario) ---
-    private suspend fun handleDeletedBilling(billingId: String, operationType: String) {
-        try {
-            // Remove from local database
-            localDataSource.deleteLocalBillingById(billingId)
-
-            // Log the cleanup action
-            Log.i("BillingSync", "Billing $billingId was deleted on server during $operationType, removed locally")
-
-            // You could also emit an event here for UI cleanup
-            // eventBus.post(BillingDeletedEvent(billingId))
-
-        } catch (e: Exception) {
-            Log.e("BillingSync", "Failed to clean up locally deleted billing $billingId", e)
-            // Don't throw - we want to consider the sync successful since the object is gone
-        }
+    private fun handleUnknownError(billingId: String, operation: PendingOperation, e: Exception): Boolean {
+        Log.e("BillingSync", "Unknown error for billing $billingId during ${operation.operationType}: ${e.message}", e)
+        return false  // Not handled
     }
 
     // --- Push pending operations ---
@@ -215,21 +237,18 @@ class BillingSyncServiceImpl @Inject constructor(
 
     private suspend fun syncOperation(currentOperation: PendingOperation, allOperations: List<PendingOperation>) {
         val billing = currentOperation.parsePayload<RemoteBilling>()
-        val totalPending = allOperations.count { it.entityId == currentOperation.entityId }
 
-        // Mark as syncing
         localDataSource.updateSyncStatus(currentOperation.entityId, SyncStatus.SYNCING)
 
         try {
             when (currentOperation.operationType) {
-                OperationType.CREATE -> pushCreatedBilling(billing)
-                OperationType.UPDATE -> pushUpdatedBilling(billing)
-                OperationType.DELIVER_ORDER -> pushDeliveredBilling(billing)
-                OperationType.DELETE -> pushDeletedBilling(billing)
+                OperationType.CREATE -> pushCreatedBilling(billing, currentOperation)
+                OperationType.UPDATE -> pushUpdatedBilling(billing, currentOperation)
+                OperationType.DELIVER_ORDER -> pushDeliveredBilling(billing, currentOperation)
+                OperationType.DELETE -> pushDeletedBilling(billing, currentOperation)
                 else -> {} // ignore other types
             }
 
-            // Remove operation after success
             when(currentOperation.operationScope){
                 OperationScope.STATE -> {
                     pendingOperationDao.deleteByKeys(
@@ -244,49 +263,64 @@ class BillingSyncServiceImpl @Inject constructor(
                 }
             }
 
-            Log.i("BillingSyncLiedji", "Liedji Successfully synced operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}")
-
-            // Update sync status depending on remaining operations
-            val newStatus = if ((totalPending - 1) > 0) SyncStatus.PENDING else SyncStatus.SYNCED
-            localDataSource.updateSyncStatus(currentOperation.entityId, newStatus)
+            updateFinalStatus(currentOperation.entityId)
 
         } catch (e: Exception) {
-            // Don't increment failure count for 404 errors (they're handled successfully)
-            val isNotFoundError = e is HttpException && e.code() == HTTP_NOT_FOUND
-            if (!isNotFoundError) {
-                pendingOperationDao.incrementFailureCount(
-                    entityType = currentOperation.entityType,
-                    entityId = currentOperation.entityId,
-                    operationType = currentOperation.operationType,
-                    orgId = currentOperation.orgId
-                )
-                val failureCount = pendingOperationDao.getFailureCount(
-                    entityType = currentOperation.entityType,
-                    entityId = currentOperation.entityId,
-                    operationType = currentOperation.operationType,
-                    orgId = currentOperation.orgId
-                )
-                val status = if (failureCount > 5) SyncStatus.FAILED else SyncStatus.PENDING
-                localDataSource.updateSyncStatus(currentOperation.entityId, status)
-            }
-
-            // Only log as error if it's not a handled 404
-            if (!isNotFoundError) {
-                Log.e("BillingSyncOperation", "Failed operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}", e)
-            }
+            // Exception was either not handled or handler said to rethrow
+            handleSyncFailure(currentOperation, e)
         }
     }
 
-    override fun getEntity(): EntityType =
-        EntityType.Billing
+    private suspend fun updateFinalStatus(entityId: String) {
+        val remaining = pendingOperationDao.countForEntity(entityId)
+        val status = if (remaining > 0) SyncStatus.PENDING else SyncStatus.SYNCED
+        localDataSource.updateSyncStatus(entityId, status)
+    }
 
+    private suspend fun handleSyncFailure(currentOperation: PendingOperation, e: Exception) {
+        val isNotFoundError = e is HttpException && e.code() == HTTP_NOT_FOUND
+        val isHandledError = when {
+            isNotFoundError -> true  // Already handled in handleNotFound()
+            e is HttpException && e.code() == HTTP_CONFLICT -> {
+                // Check if conflict was handled
+                when (currentOperation.operationType) {
+                    OperationType.CREATE, OperationType.DELETE, OperationType.DELIVER_ORDER -> true
+                    else -> false  // UPDATE and other conflicts not handled
+                }
+            }
+            else -> false
+        }
+
+        if (!isHandledError) {
+            pendingOperationDao.incrementFailureCount(
+                entityType = currentOperation.entityType,
+                entityId = currentOperation.entityId,
+                operationType = currentOperation.operationType,
+                orgId = currentOperation.orgId
+            )
+
+            val failureCount = pendingOperationDao.getFailureCount(
+                entityType = currentOperation.entityType,
+                entityId = currentOperation.entityId,
+                operationType = currentOperation.operationType,
+                orgId = currentOperation.orgId
+            )
+
+            val status = if (failureCount > 5) SyncStatus.FAILED else SyncStatus.PENDING
+            localDataSource.updateSyncStatus(currentOperation.entityId, status)
+
+            Log.e("BillingSyncOperation", "Failed operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}", e)
+        }
+    }
+
+    override fun getEntity(): EntityType = EntityType.Billing
 
     // --- Sync Logic ---
     private fun shouldPerformFullSync(lastSync: Long?): Boolean {
         return when {
-            lastSync == null -> true // First time sync
-            System.currentTimeMillis() - lastSync > SyncConfig.FULL_SYNC_THRESHOLD_MS -> true // Too old
-            else -> false // Use incremental
+            lastSync == null -> true
+            System.currentTimeMillis() - lastSync > SyncConfig.FULL_SYNC_THRESHOLD_MS -> true
+            else -> false
         }
     }
 
@@ -305,29 +339,25 @@ class BillingSyncServiceImpl @Inject constructor(
         try {
             Log.i("BillingSync", "Performing incremental sync since ${java.util.Date(since)}")
 
-            // Add small buffer for clock skew
             val adjustedSince = since - (45 * 60 * 1000) // 45 minutes buffer
 
-            // This assumes your backend supports incremental sync
             val changes = remoteDataSource.getRemoteBillingsChangesSince(organization, adjustedSince)
             val remoteBillingIds = remoteDataSource.getRemoteBillingIds(organization)
 
             val domainBillings = changes.map { billingMapper.mapRemoteToDomain(it) }
             val localEntities = domainBillings.map { billingMapper.mapDomainToLocalBillingWithItemsAndPaymentsRelation(it) }
 
-            // Apply changes
             localEntities.forEach { entity ->
                 localDataSource.insertLocalBillingWithItemsAndPaymentsRelation(entity)
             }
 
-            // Remove deleted items
             cleanupDeletedBillings(organization, remoteBillingIds)
 
             Log.i("BillingSync", "Incremental sync completed: ${changes.size} updates")
 
         } catch (e: Exception) {
             Log.w("BillingSync", "Incremental sync failed, will fall back to full sync", e)
-            throw e // Trigger fallback to full sync
+            throw e
         }
     }
 
@@ -339,12 +369,10 @@ class BillingSyncServiceImpl @Inject constructor(
         val domainBillings = remoteBillings.map { billingMapper.mapRemoteToDomain(it) }
         val localEntities = domainBillings.map { billingMapper.mapDomainToLocalBillingWithItemsAndPaymentsRelation(it) }
 
-        //  insert new
         localEntities.forEach {
             localDataSource.insertLocalBillingWithItemsAndPaymentsRelation(it)
         }
 
-        // Clear existing data
         cleanupDeletedBillings(organization, remoteBillingIds)
 
         Log.i("BillingSync", "Full sync completed: ${localEntities.size} billings")
@@ -353,8 +381,6 @@ class BillingSyncServiceImpl @Inject constructor(
     // --- Full pull from remote ---
     override suspend fun pullAll(organization: String) {
         Log.i("BillingSync", "Sync started for organization: $organization")
-
-        //testSyncMetadataOperations()
 
         val lastSync = getLastSyncTimestamp()
         val shouldFullSync = shouldPerformFullSync(lastSync)
@@ -365,11 +391,9 @@ class BillingSyncServiceImpl @Inject constructor(
         var incrementalAttempts = 0
         var syncError: String? = null
 
-        // Try incremental first, fall back to full sync if needed
         while (!success && incrementalAttempts <= SyncConfig.MAX_INCREMENTAL_RETRY_COUNT) {
             try {
                 if (shouldFullSync || incrementalAttempts > 0) {
-                    // Force full sync after incremental failures or if threshold passed
                     processFullSync(organization)
                 } else {
                     lastSync?.let { processIncrementalChanges(organization, it) }
@@ -391,13 +415,11 @@ class BillingSyncServiceImpl @Inject constructor(
                     }
                 } else {
                     Log.w("BillingSync", "Incremental sync attempt $incrementalAttempts failed, retrying...", e)
-                    // Small delay before retry
                     delay(1000L * incrementalAttempts)
                 }
             }
         }
 
-        // Update sync timestamp
         if (success) {
             updateLastSyncTimestamp(System.currentTimeMillis(), true)
             Log.i("BillingSync", "Sync completed successfully")
@@ -410,7 +432,7 @@ class BillingSyncServiceImpl @Inject constructor(
 
     private suspend fun cleanupDeletedBillings(
         organization: String,
-        allRemoteIds: List<String>, // Just pass IDs, not full objects
+        allRemoteIds: List<String>,
         maxDeletions: Int = 500
     ): CleanupResult {
         try {
@@ -418,22 +440,18 @@ class BillingSyncServiceImpl @Inject constructor(
 
             val localIds = localDataSource.getLocalBillingIds().toSet()
             val remoteIdsSet = allRemoteIds.toSet()
-
-            // Items that should be removed locally because they no longer exist on the server
             val mustBeDeletedLocally = localIds.subtract(remoteIdsSet)
 
             return if (mustBeDeletedLocally.isNotEmpty()) {
-                // Apply safety limit
                 val idsToDelete = if (mustBeDeletedLocally.size > maxDeletions) {
                     Log.w("BillingSync", "Too many deletions (${mustBeDeletedLocally.size}), limiting to $maxDeletions")
                     mustBeDeletedLocally.take(maxDeletions)
                 } else {
-                    mustBeDeletedLocally.toList() // Convert back to list for consistent type
+                    mustBeDeletedLocally.toList()
                 }
 
                 Log.i("BillingSync", "Found ${mustBeDeletedLocally.size} billings to delete (processing ${idsToDelete.size})")
 
-                // Batch deletion for better performance
                 idsToDelete.forEach { deletedId ->
                     localDataSource.deleteLocalBillingById(deletedId)
                 }

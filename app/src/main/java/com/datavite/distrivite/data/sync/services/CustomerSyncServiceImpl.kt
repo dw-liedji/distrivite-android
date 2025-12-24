@@ -17,6 +17,7 @@ import kotlinx.coroutines.delay
 import retrofit2.HttpException
 import java.io.IOException
 import java.net.HttpURLConnection.*
+
 import javax.inject.Inject
 
 class CustomerSyncServiceImpl @Inject constructor(
@@ -28,7 +29,7 @@ class CustomerSyncServiceImpl @Inject constructor(
 ) : CustomerSyncService {
 
     // --- Push CREATE ---
-    private suspend fun pushCreatedCustomer(remoteCustomer: RemoteCustomer) {
+    private suspend fun pushCreatedCustomer(remoteCustomer: RemoteCustomer, currentOperation: PendingOperation) {
         try {
             remoteDataSource.createRemoteCustomer(remoteCustomer.orgSlug, remoteCustomer)
             val updatedDomain = customerMapper.mapRemoteToDomain(remoteCustomer)
@@ -37,13 +38,13 @@ class CustomerSyncServiceImpl @Inject constructor(
             localDataSource.insertLocalCustomer(localEntity)
             Log.i("CustomerSync", "Successfully synced created customer ${remoteCustomer.id}")
         } catch (e: Exception) {
-            handleCustomerSyncException(e, remoteCustomer.id, "CREATE")
-            throw e
+            val handled = handleCustomerSyncException(e, remoteCustomer.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Push UPDATE ---
-    private suspend fun pushUpdatedCustomer(remoteCustomer: RemoteCustomer) {
+    private suspend fun pushUpdatedCustomer(remoteCustomer: RemoteCustomer, currentOperation: PendingOperation) {
         try {
             remoteDataSource.updateRemoteCustomer(remoteCustomer.orgSlug, remoteCustomer)
             val updatedDomain = customerMapper.mapRemoteToDomain(remoteCustomer)
@@ -52,110 +53,157 @@ class CustomerSyncServiceImpl @Inject constructor(
             localDataSource.insertLocalCustomer(localEntity)
             Log.i("CustomerSync", "Successfully synced updated customer ${remoteCustomer.id}")
         } catch (e: Exception) {
-            handleCustomerSyncException(e, remoteCustomer.id, "UPDATE")
-            throw e
+            val handled = handleCustomerSyncException(e, remoteCustomer.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Push DELETE ---
-    private suspend fun pushDeletedCustomer(remoteCustomer: RemoteCustomer) {
+    private suspend fun pushDeletedCustomer(remoteCustomer: RemoteCustomer, currentOperation: PendingOperation) {
         try {
             remoteDataSource.deleteRemoteCustomer(remoteCustomer.orgSlug, remoteCustomer.id)
             Log.i("CustomerSync", "Successfully synced deleted customer ${remoteCustomer.id}")
         } catch (e: Exception) {
-            handleCustomerSyncException(e, remoteCustomer.id, "DELETE")
-            throw e
+            val handled = handleCustomerSyncException(e, remoteCustomer.id, currentOperation)
+            if (!handled) throw e
         }
     }
 
     // --- Comprehensive Exception Handling ---
-    private suspend fun handleCustomerSyncException(e: Exception, customerId: String, operation: String) {
-        when (e) {
+    private suspend fun handleCustomerSyncException(e: Exception, customerId: String, currentOperation: PendingOperation): Boolean {
+        return when (e) {
             is HttpException -> {
                 when (e.code()) {
-                    HTTP_NOT_FOUND -> handleNotFound(customerId, operation)
-                    HTTP_CONFLICT -> handleConflict(customerId, operation)
-                    HTTP_UNAVAILABLE -> handleServiceUnavailable(customerId, operation)
-                    HTTP_INTERNAL_ERROR -> handleServerError(customerId, operation)
-                    HTTP_BAD_REQUEST -> handleBadRequest(customerId, operation)
-                    HTTP_UNAUTHORIZED -> handleUnauthorized(customerId, operation)
-                    HTTP_FORBIDDEN -> handleForbidden(customerId, operation)
-                    HTTP_BAD_GATEWAY -> handleBadGateway(customerId, operation)
-                    HTTP_GATEWAY_TIMEOUT -> handleGatewayTimeout(customerId, operation)
-                    in 400..499 -> handleClientError(customerId, operation, e.code())
-                    in 500..599 -> handleServerError(customerId, operation, e.code())
-                    else -> handleGenericHttpError(customerId, operation, e.code())
+                    HTTP_NOT_FOUND -> handleNotFound(customerId, currentOperation)
+                    HTTP_CONFLICT -> handleConflict(customerId, currentOperation)
+                    HTTP_UNAVAILABLE -> handleServiceUnavailable(customerId, currentOperation)
+                    HTTP_INTERNAL_ERROR -> handleServerError(customerId, currentOperation)
+                    HTTP_BAD_REQUEST -> handleBadRequest(customerId, currentOperation)
+                    HTTP_UNAUTHORIZED -> handleUnauthorized(customerId, currentOperation)
+                    HTTP_FORBIDDEN -> handleForbidden(customerId, currentOperation)
+                    HTTP_BAD_GATEWAY -> handleBadGateway(customerId, currentOperation)
+                    HTTP_GATEWAY_TIMEOUT -> handleGatewayTimeout(customerId, currentOperation)
+                    in 400..499 -> handleClientError(customerId, currentOperation, e.code())
+                    in 500..599 -> handleServerError(customerId, currentOperation, e.code())
+                    else -> handleGenericHttpError(customerId, currentOperation, e.code())
                 }
             }
-            is IOException -> handleNetworkError(customerId, operation, e)
-            else -> handleUnknownError(customerId, operation, e)
+            is IOException -> handleNetworkError(customerId, currentOperation, e)
+            else -> handleUnknownError(customerId, currentOperation, e)
         }
     }
 
     // --- HTTP Status Code Handlers ---
-    private suspend fun handleNotFound(customerId: String, operation: String) {
-        Log.i("CustomerSync", "Customer $customerId not found during $operation - removing locally")
-        handleDeletedCustomer(customerId, operation)
+    private suspend fun handleNotFound(customerId: String, operation: PendingOperation): Boolean {
+        Log.i("CustomerSync", "Customer $customerId not found during ${operation.operationType} - removing locally")
+        return try {
+            localDataSource.deleteLocalCustomerById(customerId)
+            Log.i("CustomerSync", "Customer $customerId was deleted on server, removed locally")
+            true  // Exception handled successfully
+        } catch (e: Exception) {
+            Log.e("CustomerSync", "Failed to clean up locally deleted customer $customerId", e)
+            false  // Exception not fully handled
+        }
     }
 
-    private fun handleConflict(customerId: String, operation: String) {
-        Log.w("CustomerSync", "Conflict detected for customer $customerId during $operation - requires resolution")
+    private suspend fun handleConflict(customerId: String, operation: PendingOperation): Boolean {
+        Log.w("CustomerSync", "Conflict detected for customer $customerId during ${operation.operationType} - resolving...")
+
+        return when (operation.operationType) {
+            OperationType.CREATE -> resolveCreateConflict(customerId, operation)
+            OperationType.UPDATE -> resolveUpdateConflict(customerId, operation)
+            OperationType.DELETE -> resolveDeleteConflict(customerId, operation)
+            else -> {
+                Log.w("CustomerSync", "Unhandled conflict type for ${operation.operationType}")
+                false
+            }
+        }
     }
 
-    private fun handleServiceUnavailable(customerId: String, operation: String) {
-        Log.w("CustomerSync", "Service unavailable for customer $customerId during $operation - retry later")
+    private suspend fun resolveCreateConflict(customerId: String, operation: PendingOperation): Boolean {
+        try {
+            // For CREATE conflict, customer already exists on server
+            localDataSource.updateSyncStatus(operation.entityId, SyncStatus.SYNCED)
+            Log.w("CustomerSync", "CREATE conflict resolved for $customerId - marked as synced")
+            return true
+        } catch (e: Exception) {
+            Log.e("CustomerSync", "Failed to resolve CREATE conflict for $customerId", e)
+            return false
+        }
     }
 
-    private fun handleServerError(customerId: String, operation: String, statusCode: Int? = null) {
+    private suspend fun resolveUpdateConflict(customerId: String, operation: PendingOperation): Boolean {
+        Log.w("CustomerSync", "UPDATE conflict for $customerId - keeping as pending for retry")
+        return false  // Not handled, will retry
+    }
+
+    private suspend fun resolveDeleteConflict(customerId: String, operation: PendingOperation): Boolean {
+        try {
+            // For DELETE conflict, item might already be deleted
+            localDataSource.deleteLocalCustomerById(customerId)
+            Log.i("CustomerSync", "DELETE conflict resolved for $customerId - removed locally")
+            return true
+        } catch (e: Exception) {
+            Log.e("CustomerSync", "Failed to resolve DELETE conflict for $customerId", e)
+            return false
+        }
+    }
+
+    private fun handleServiceUnavailable(customerId: String, operation: PendingOperation): Boolean {
+        Log.w("CustomerSync", "Service unavailable for customer $customerId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
+    }
+
+    private fun handleServerError(customerId: String, operation: PendingOperation, statusCode: Int? = null): Boolean {
         val codeInfo = if (statusCode != null) " (code: $statusCode)" else ""
-        Log.e("CustomerSync", "Server error for customer $customerId during $operation$codeInfo")
+        Log.e("CustomerSync", "Server error for customer $customerId during ${operation.operationType}$codeInfo")
+        return false  // Not handled, will retry
     }
 
-    private fun handleBadRequest(customerId: String, operation: String) {
-        Log.e("CustomerSync", "Bad request for customer $customerId during $operation - check data format")
+    private fun handleBadRequest(customerId: String, operation: PendingOperation): Boolean {
+        Log.e("CustomerSync", "Bad request for customer $customerId during ${operation.operationType} - check data format")
+        return true  // Handled - bad request won't succeed on retry
     }
 
-    private fun handleUnauthorized(customerId: String, operation: String) {
-        Log.e("CustomerSync", "Unauthorized for customer $customerId during $operation - authentication required")
+    private fun handleUnauthorized(customerId: String, operation: PendingOperation): Boolean {
+        Log.e("CustomerSync", "Unauthorized for customer $customerId during ${operation.operationType} - authentication required")
+        return true  // Handled - auth error needs user intervention
     }
 
-    private fun handleForbidden(customerId: String, operation: String) {
-        Log.e("CustomerSync", "Forbidden for customer $customerId during $operation - insufficient permissions")
+    private fun handleForbidden(customerId: String, operation: PendingOperation): Boolean {
+        Log.e("CustomerSync", "Forbidden for customer $customerId during ${operation.operationType} - insufficient permissions")
+        return true  // Handled - permission error won't succeed on retry
     }
 
-    private fun handleBadGateway(customerId: String, operation: String) {
-        Log.w("CustomerSync", "Bad gateway for customer $customerId during $operation - retry later")
+    private fun handleBadGateway(customerId: String, operation: PendingOperation): Boolean {
+        Log.w("CustomerSync", "Bad gateway for customer $customerId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
     }
 
-    private fun handleGatewayTimeout(customerId: String, operation: String) {
-        Log.w("CustomerSync", "Gateway timeout for customer $customerId during $operation - retry later")
+    private fun handleGatewayTimeout(customerId: String, operation: PendingOperation): Boolean {
+        Log.w("CustomerSync", "Gateway timeout for customer $customerId during ${operation.operationType} - retry later")
+        return false  // Not handled, will retry
     }
 
-    private fun handleClientError(customerId: String, operation: String, statusCode: Int) {
-        Log.e("CustomerSync", "Client error $statusCode for customer $customerId during $operation")
+    private fun handleClientError(customerId: String, operation: PendingOperation, statusCode: Int): Boolean {
+        Log.e("CustomerSync", "Client error $statusCode for customer $customerId during ${operation.operationType}")
+        return true  // Handled - client errors won't succeed on retry without fixing
     }
 
-    private fun handleGenericHttpError(customerId: String, operation: String, statusCode: Int) {
-        Log.e("CustomerSync", "HTTP error $statusCode for customer $customerId during $operation")
+    private fun handleGenericHttpError(customerId: String, operation: PendingOperation, statusCode: Int): Boolean {
+        Log.e("CustomerSync", "HTTP error $statusCode for customer $customerId during ${operation.operationType}")
+        return false  // Not handled, generic case
     }
 
     // --- Network and Generic Error Handlers ---
-    private fun handleNetworkError(customerId: String, operation: String, e: IOException) {
-        Log.w("CustomerSync", "Network error for customer $customerId during $operation: ${e.message}")
+    private fun handleNetworkError(customerId: String, operation: PendingOperation, e: IOException): Boolean {
+        Log.w("CustomerSync", "Network error for customer $customerId during ${operation.operationType}: ${e.message}")
+        return false  // Not handled, will retry
     }
 
-    private fun handleUnknownError(customerId: String, operation: String, e: Exception) {
-        Log.e("CustomerSync", "Unknown error for customer $customerId during $operation: ${e.message}", e)
-    }
-
-    // --- Handle deleted customer (404 scenario) ---
-    private suspend fun handleDeletedCustomer(customerId: String, operationType: String) {
-        try {
-            localDataSource.deleteLocalCustomerById(customerId)
-            Log.i("CustomerSync", "Customer $customerId was deleted on server during $operationType, removed locally")
-        } catch (e: Exception) {
-            Log.e("CustomerSync", "Failed to clean up locally deleted customer $customerId", e)
-        }
+    private fun handleUnknownError(customerId: String, operation: PendingOperation, e: Exception): Boolean {
+        Log.e("CustomerSync", "Unknown error for customer $customerId during ${operation.operationType}: ${e.message}", e)
+        return false  // Not handled
     }
 
     // --- Push pending operations ---
@@ -169,15 +217,14 @@ class CustomerSyncServiceImpl @Inject constructor(
 
     private suspend fun syncOperation(currentOperation: PendingOperation, allOperations: List<PendingOperation>) {
         val customer = currentOperation.parsePayload<RemoteCustomer>()
-        val totalPending = allOperations.count { it.entityId == currentOperation.entityId }
 
         localDataSource.updateSyncStatus(currentOperation.entityId, SyncStatus.SYNCING)
 
         try {
             when (currentOperation.operationType) {
-                OperationType.CREATE -> pushCreatedCustomer(customer)
-                OperationType.UPDATE -> pushUpdatedCustomer(customer)
-                OperationType.DELETE -> pushDeletedCustomer(customer)
+                OperationType.CREATE -> pushCreatedCustomer(customer, currentOperation)
+                OperationType.UPDATE -> pushUpdatedCustomer(customer, currentOperation)
+                OperationType.DELETE -> pushDeletedCustomer(customer, currentOperation)
                 else -> {} // ignore other types
             }
 
@@ -195,31 +242,53 @@ class CustomerSyncServiceImpl @Inject constructor(
                 }
             }
 
-            val newStatus = if ((totalPending - 1) > 0) SyncStatus.PENDING else SyncStatus.SYNCED
-            localDataSource.updateSyncStatus(currentOperation.entityId, newStatus)
+            updateFinalStatus(currentOperation.entityId)
 
         } catch (e: Exception) {
-            val isNotFoundError = e is HttpException && e.code() == HTTP_NOT_FOUND
-            if (!isNotFoundError) {
-                pendingOperationDao.incrementFailureCount(
-                    entityType = currentOperation.entityType,
-                    entityId = currentOperation.entityId,
-                    operationType = currentOperation.operationType,
-                    orgId = currentOperation.orgId
-                )
-                val failureCount = pendingOperationDao.getFailureCount(
-                    entityType = currentOperation.entityType,
-                    entityId = currentOperation.entityId,
-                    operationType = currentOperation.operationType,
-                    orgId = currentOperation.orgId
-                )
-                val status = if (failureCount > 5) SyncStatus.FAILED else SyncStatus.PENDING
-                localDataSource.updateSyncStatus(currentOperation.entityId, status)
-            }
+            // Exception was either not handled or handler said to rethrow
+            handleSyncFailure(currentOperation, e)
+        }
+    }
 
-            if (!isNotFoundError) {
-                Log.e("CustomerSyncOperation", "Failed operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}", e)
+    private suspend fun updateFinalStatus(entityId: String) {
+        val remaining = pendingOperationDao.countForEntity(entityId)
+        val status = if (remaining > 0) SyncStatus.PENDING else SyncStatus.SYNCED
+        localDataSource.updateSyncStatus(entityId, status)
+    }
+
+    private suspend fun handleSyncFailure(currentOperation: PendingOperation, e: Exception) {
+        val isNotFoundError = e is HttpException && e.code() == HTTP_NOT_FOUND
+        val isHandledError = when {
+            isNotFoundError -> true  // Already handled in handleNotFound()
+            e is HttpException && e.code() == HTTP_CONFLICT -> {
+                // Check if conflict was handled
+                when (currentOperation.operationType) {
+                    OperationType.CREATE, OperationType.DELETE -> true  // Handled in resolve methods
+                    else -> false  // UPDATE conflict not handled
+                }
             }
+            else -> false
+        }
+
+        if (!isHandledError) {
+            pendingOperationDao.incrementFailureCount(
+                entityType = currentOperation.entityType,
+                entityId = currentOperation.entityId,
+                operationType = currentOperation.operationType,
+                orgId = currentOperation.orgId
+            )
+
+            val failureCount = pendingOperationDao.getFailureCount(
+                entityType = currentOperation.entityType,
+                entityId = currentOperation.entityId,
+                operationType = currentOperation.operationType,
+                orgId = currentOperation.orgId
+            )
+
+            val status = if (failureCount > 5) SyncStatus.FAILED else SyncStatus.PENDING
+            localDataSource.updateSyncStatus(currentOperation.entityId, status)
+
+            Log.e("CustomerSyncOperation", "Failed operation ${currentOperation.operationType} ${currentOperation.entityType} ${currentOperation.entityId}", e)
         }
     }
 

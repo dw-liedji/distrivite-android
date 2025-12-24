@@ -28,7 +28,7 @@ android {
     buildTypes {
 
         val production = "\"https://distrivite-b3825671fa5a.herokuapp.com/\""
-        val development = "\"http://192.168.43.107:8001/\""
+        val development = "\"http://192.168.43.108:8001/\""
 
         val currentEnv = development
 
