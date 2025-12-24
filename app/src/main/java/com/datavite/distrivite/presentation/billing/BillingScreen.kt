@@ -48,6 +48,7 @@ import com.datavite.distrivite.app.BottomNavigationBar
 import com.datavite.distrivite.data.remote.model.auth.AuthOrgUser
 import com.datavite.distrivite.domain.model.DomainBillingItem
 import com.datavite.distrivite.domain.model.DomainBillingPayment
+import com.datavite.distrivite.domain.model.DomainStock
 import com.datavite.distrivite.domain.model.auth.AppPermission
 import com.datavite.distrivite.domain.model.auth.has
 import com.datavite.distrivite.presentation.components.TiqtaqTopBar
@@ -163,7 +164,7 @@ fun BillingScreen(
                                 BillPDFExporter.exportBillToPDF(context, it, selectedBilling.billNumber)
                             } ?: Toast.makeText(context, "Bill view not ready", Toast.LENGTH_SHORT).show()
                         },
-                        onAddItem = {},
+                        onAddItem = {viewModel.showAddItemDialog()},
                         onEditItem = {viewModel.showEditItemDialog(it)},
                         onDeleteItem = {viewModel.onDeleteItem(it)},
                         onAddPayment = { viewModel.showAddPaymentDialog() }, // Changed to dialog
@@ -182,6 +183,15 @@ fun BillingScreen(
                     billing = billingUiState.selectedBilling,
                     onAddPayment = { amount, broker -> viewModel.addPayment(amount, broker) },
                     onDismiss = { viewModel.hideAddPaymentDialog() }
+                )
+            }
+
+            if (billingUiState.isAddItemDialogVisible) {
+                AddItemDialog(
+                    billing = billingUiState.selectedBilling,
+                    onAddItem = { stock, quantity, unitPrice -> viewModel.addItem(stock, quantity, unitPrice) },
+                    availableStocks = billingUiState.availableStocks,
+                    onDismiss = { viewModel.hideAddItemDialog() }
                 )
             }
 
@@ -364,7 +374,7 @@ fun BillingDetailModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Items", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (authOrgUser.permissions.has(AppPermission.ORDERS_ADD_BILLING_STOCK)) { // Add permission check
+            if (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_ADD_BILLING_STOCK)) { // Add permission check
                 FilledTonalButton(
                     onClick = onAddItem,
                     modifier = Modifier.height(36.dp)
@@ -409,7 +419,7 @@ fun BillingDetailModal(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Payments", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            if (!isFullyPaid && authOrgUser.permissions.has(AppPermission.ORDERS_ADD_BILLING_PAYMENT)) {
+            if (!isFullyPaid && (authOrgUser.isManager || authOrgUser.isAdmin || authOrgUser.permissions.has(AppPermission.ORDERS_ADD_BILLING_PAYMENT))) {
                 FilledTonalButton(
                     onClick = onAddPayment,
                     modifier = Modifier.height(36.dp)
@@ -580,6 +590,262 @@ fun ItemRow(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun AddItemDialog(
+    billing: DomainBilling?,
+    onAddItem: (domainStock :DomainStock, quantity: Int, unitPrice: Double) -> Unit,
+    onDismiss: () -> Unit,
+    availableStocks: List<DomainStock>
+) {
+
+    if (billing == null) return
+
+    // You'll need to get available stocks from your viewmodel
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedStock by remember { mutableStateOf<DomainStock?>(null) }
+    var quantity by remember { mutableStateOf("1") }
+    var unitPrice by remember { mutableStateOf("") }
+
+    // Filter out stocks that are already in the bill
+    val alreadyInBillStockIds = remember(billing) {
+        billing.items.map { it.stockId }.toSet()
+    }
+
+    val filteredStocks = availableStocks.filter { stock ->
+        !alreadyInBillStockIds.contains(stock.id) && (
+                stock.itemName.contains(searchQuery, ignoreCase = true) ||
+                        stock.categoryName.contains(searchQuery, ignoreCase = true)
+                )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Add Item to Bill",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Stock Search
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search Stock") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Stock Selection List
+                if (searchQuery.isNotEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .heightIn(max = 200.dp)
+                            .fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filteredStocks) { stock ->
+                            StockSelectionItem(
+                                stock = stock,
+                                isSelected = selectedStock?.id == stock.id,
+                                onSelected = {
+                                    selectedStock = stock
+                                    searchQuery = ""
+                                    quantity = "1"
+                                    unitPrice = ""
+                                }
+                            )
+                        }
+                    }
+                }
+
+                // Selected Stock Info
+                selectedStock?.let { stock ->
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column {
+                                    Text(
+                                        stock.itemName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        "Code: ${stock.categoryName}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    "Stock: ${stock.quantity}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (stock.quantity > 0) Color.Green else Color.Red
+                                )
+                            }
+
+                            if (stock.quantity <= 0) {
+                                Text(
+                                    "⚠️ Out of stock",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color.Red
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Quantity and Price Inputs
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedTextField(
+                        value = quantity,
+                        onValueChange = { newValue ->
+                            val filtered = newValue.filter { it.isDigit() }
+                            quantity = filtered.ifEmpty { "1" }
+                        },
+                        label = { Text("Qty") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = unitPrice,
+                        onValueChange = { newValue ->
+                            // Allow decimal numbers
+                            val filtered = newValue.filter { it.isDigit() || it == '.' }
+                            if (filtered.count { it == '.' } <= 1) {
+                                unitPrice = filtered
+                            }
+                        },
+                        label = { Text("Price (FCFA)") },
+                        placeholder = { selectedStock?.let { Text(it.billingPrice.toString()) } },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        prefix = { if (unitPrice.isNotEmpty()) Text("FCFA") }
+                    )
+                }
+
+                // Auto-fill price from selected stock
+                if (unitPrice.isEmpty() && selectedStock != null) {
+                    LaunchedEffect(selectedStock) {
+                        unitPrice = selectedStock?.billingPrice?.toString() ?: ""
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Cancel")
+                }
+
+                Button(
+                    onClick = {
+                        selectedStock?.let {
+                            val qty = quantity.toIntOrNull() ?: 1
+                            val price = unitPrice.toDoubleOrNull() ?: it.billingPrice
+                            onAddItem(it, qty, price)
+                        }
+                    },
+                    enabled = selectedStock != null &&
+                            (quantity.toIntOrNull() ?: 0) > 0 &&
+                            (unitPrice.toDoubleOrNull() ?: 0.0) > 0,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Add Item")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun StockSelectionItem(
+    stock: DomainStock,
+    isSelected: Boolean,
+    onSelected: () -> Unit
+) {
+    Surface(
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        tonalElevation = if (isSelected) 2.dp else 1.dp,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelected() }
+            .padding(vertical = 2.dp)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stock.itemName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    stock.categoryName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "Stock: ${stock.quantity}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (stock.quantity > 0) Color.Green else Color.Red
+                )
+                Text(
+                    "${stock.billingPrice} FCFA",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }

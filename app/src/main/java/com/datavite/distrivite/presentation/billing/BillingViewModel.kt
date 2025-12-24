@@ -12,6 +12,7 @@ import com.datavite.distrivite.data.sync.SyncOrchestrator
 import com.datavite.distrivite.domain.model.DomainBilling
 import com.datavite.distrivite.domain.model.DomainBillingItem
 import com.datavite.distrivite.domain.model.DomainBillingPayment
+import com.datavite.distrivite.domain.model.DomainStock
 import com.datavite.distrivite.domain.model.DomainTransaction
 import com.datavite.distrivite.domain.notification.NotificationBus
 import com.datavite.distrivite.domain.notification.NotificationEvent
@@ -55,6 +56,7 @@ class BillingViewModel @Inject constructor(
         Log.d("BillingViewModel", "Initialized")
         observeOrganization()
         observeLocalBillingsData()
+        observeLocalStocksData()
     }
 
     private fun observeOrganization() = viewModelScope.launch(Dispatchers.IO) {
@@ -73,6 +75,14 @@ class BillingViewModel @Inject constructor(
             billingRepository.getDomainBillingsFlow()
                 .catch { it.printStackTrace() }
                 .collect { loadBillings(it) }
+        }
+    }
+
+    private fun observeLocalStocksData() {
+        viewModelScope.launch {
+            stockRepository.getDomainStocksFlow()
+                .catch { it.printStackTrace() }
+                .collect { loadStocks(it) }
         }
     }
 
@@ -124,6 +134,15 @@ class BillingViewModel @Inject constructor(
 
     fun hideAddPaymentDialog() {
         _billingUiState.update { it.copy(isAddPaymentDialogVisible = false) }
+    }
+
+
+    fun showAddItemDialog() {
+        _billingUiState.update { it.copy(isAddItemDialogVisible = true) }
+    }
+
+    fun hideAddItemDialog() {
+        _billingUiState.update { it.copy(isAddItemDialogVisible = false) }
     }
 
     fun addPayment(amount: Double, transactionBroker: TransactionBroker) {
@@ -194,24 +213,46 @@ class BillingViewModel @Inject constructor(
     }
 
     // --- CREATE Item ---
-    fun addItem(newItem: DomainBillingItem) {
+    fun addItem(domainStock: DomainStock, quantity: Int, unitPrice: Double) {
+        hideAddItemDialog()
+
         val selectedBilling = _billingUiState.value.selectedBilling ?: return
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val updatedBilling = selectedBilling.copy(
-                    items = selectedBilling.items + newItem
-                )
+                val orgUser = _authOrgUser.value
+                if(orgUser != null) {
+                    val newItem = DomainBillingItem(
+                        id = generateUUIDString(),          // can generate a UUID if needed
+                        created = LocalDateTime.now().toString(),
+                        modified = LocalDateTime.now().toString(),
+                        orgSlug = orgUser.orgSlug,
+                        orgId = orgUser.orgId,
+                        orgUserId = orgUser.id,
+                        isDelivered = true,
+                        stockId = domainStock.id,
+                        stockName = domainStock.itemName,
+                        quantity = quantity,
+                        unitPrice = unitPrice,
+                        billingId = selectedBilling.id,
+                        syncStatus = SyncStatus.PENDING
+                    )
 
-                billingRepository.updateBilling(updatedBilling)
-                _billingUiState.update { it.copy(selectedBilling = updatedBilling) }
-                showInfoMessage("Item added successfully")
+                    val updatedBilling = selectedBilling.copy(
+                        items = selectedBilling.items + newItem
+                    )
 
-                // Sync with server
-                authOrgUser.value?.orgSlug?.let { syncOrchestrator.push(it) }
+                    _billingUiState.update { it.copy(selectedBilling = updatedBilling) }
+                    billingRepository.updateBilling(updatedBilling)
+                    stockRepository.updateStockQuantity(domainStock, -quantity)
+                    showInfoMessage("${domainStock.itemName} added successfully")
+
+                    // Sync with server
+                    orgUser.let { syncOrchestrator.push(it.orgSlug) }
+                }
 
             } catch (e: Exception) {
-                showErrorMessage("Failed to add item: ${e.message}")
+                showErrorMessage("Failed to add payment: ${e.message}")
             }
         }
     }
@@ -417,6 +458,16 @@ class BillingViewModel @Inject constructor(
             )
         }
     }
+
+    fun loadStocks(stocks: List<DomainStock>) {
+        _billingUiState.update { currentState ->
+
+            currentState.copy(
+                availableStocks = stocks,
+            )
+        }
+    }
+
 
     private fun filterBillings(
         billings: List<DomainBilling>,
