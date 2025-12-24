@@ -3,23 +3,28 @@ package com.datavite.distrivite.presentation.billing
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -30,6 +35,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +65,9 @@ import com.ramcosta.composedestinations.annotation.RootGraph
 import com.ramcosta.composedestinations.generated.destinations.BillingScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import kotlinx.coroutines.delay
+import java.text.NumberFormat
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Destination<RootGraph>
@@ -738,15 +746,13 @@ fun AddItemDialog(
                     OutlinedTextField(
                         value = unitPrice,
                         onValueChange = { newValue ->
-                            // Allow decimal numbers
-                            val filtered = newValue.filter { it.isDigit() || it == '.' }
-                            if (filtered.count { it == '.' } <= 1) {
-                                unitPrice = filtered
+                            if (newValue.all { it.isDigit() }) {
+                                unitPrice = newValue
                             }
                         },
                         label = { Text("Price (FCFA)") },
-                        placeholder = { selectedStock?.let { Text(it.billingPrice.toString()) } },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        placeholder = { selectedStock?.let { Text("${it.billingPrice.toInt()}") } },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         prefix = { if (unitPrice.isNotEmpty()) Text("FCFA") }
@@ -797,54 +803,149 @@ fun AddItemDialog(
 fun StockSelectionItem(
     stock: DomainStock,
     isSelected: Boolean,
-    onSelected: () -> Unit
+    onSelected: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    // For accessibility - announce selection state
+    val selectionDescription = remember(isSelected) {
+        if (isSelected) "Selected ${stock.itemName}" else stock.itemName
+    }
+
+    // Haptic feedback for selection
+    val hapticFeedback = LocalHapticFeedback.current
+
     Surface(
         color = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surface
         },
-        tonalElevation = if (isSelected) 2.dp else 1.dp,
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier
+        tonalElevation = if (isSelected) 4.dp else 0.dp,
+        shadowElevation = if (isSelected) 2.dp else 0.dp,
+        shape = MaterialTheme.shapes.medium,
+        modifier = modifier
             .fillMaxWidth()
-            .clickable { onSelected() }
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(
+                    bounded = true,
+                    radius = 24.dp
+                ),
+                onClick = {
+                    onSelected()
+                    // Provide haptic feedback
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+            )
+            .animateContentSize() // Smooth size animations
             .padding(vertical = 2.dp)
+
     ) {
         Row(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .fillMaxWidth()
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            // Main content column
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            ) {
+                // Item name with proper contrast
                 Text(
-                    stock.itemName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    text = stock.itemName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(bottom = 2.dp)
                 )
+
+                // Category with icon
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Category,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stock.categoryName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Right side - Stock info and price
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // Stock quantity with visual indicator
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Visual stock indicator
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                color = when {
+                                    stock.quantity <= 0 -> MaterialTheme.colorScheme.error
+                                    stock.quantity < 10 -> MaterialTheme.colorScheme.errorContainer
+                                    else -> MaterialTheme.colorScheme.tertiary
+                                }
+                            )
+                    )
+
+                    // Stock text
+                    Text(
+                        text = if (stock.quantity <= 0) {
+                            "Out of stock"
+                        } else {
+                            "${stock.quantity} left"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when {
+                            stock.quantity <= 0 -> MaterialTheme.colorScheme.error
+                            stock.quantity < 10 -> MaterialTheme.colorScheme.onErrorContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontWeight = if (stock.quantity < 10) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
+
+                // Price with proper formatting
                 Text(
-                    stock.categoryName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = stock.billingPrice.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    "Stock: ${stock.quantity}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (stock.quantity > 0) Color.Green else Color.Red
-                )
-                Text(
-                    "${stock.billingPrice} FCFA",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium
+            // Selection indicator
+            if (isSelected) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null, // Already covered by semantics
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1092,11 +1193,24 @@ fun EditPaymentDialog(
 
     var amount by remember { mutableStateOf(payment.amount.toString()) }
     var selectedBroker by remember { mutableStateOf(payment.transactionBroker) }
+    var isAmountError by remember { mutableStateOf(false) }
 
     val remainingDue = remember(billing, payment) {
         val otherPayments = billing.payments.filter { it.id != payment.id }
         val totalOtherPaid = otherPayments.sumOf { it.amount }
         (billing.totalPrice - totalOtherPaid).coerceAtLeast(0.0)
+    }
+
+    // Validate amount on each change
+    LaunchedEffect(amount) {
+        val amountValue = amount.toDoubleOrNull()
+        isAmountError = when {
+            amount.isBlank() -> true
+            amountValue == null -> true
+            amountValue <= 0 -> true
+            amountValue > remainingDue -> true
+            else -> false
+        }
     }
 
     AlertDialog(
@@ -1107,41 +1221,123 @@ fun EditPaymentDialog(
                 // Remaining due info
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
-                        "Remaining due after other payments: $remainingDue FCFA",
-                        modifier = Modifier.padding(8.dp),
-                        style = MaterialTheme.typography.bodySmall
+                        "Remaining due after other payments: ${remainingDue.toInt()} FCFA",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
                 OutlinedTextField(
                     value = amount,
-                    onValueChange = { amount = it },
+                    onValueChange = { newValue ->
+                        // Allow only digits
+                        val filtered = newValue.filter { it.isDigit() }
+                        amount = filtered
+                    },
                     label = { Text("Amount (FCFA)") },
+                    placeholder = { Text("Enter amount") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = isAmountError,
+                    supportingText = {
+                        if (isAmountError) {
+                            val errorText = when {
+                                amount.isBlank() -> "Amount is required"
+                                amount.toDoubleOrNull() == null -> "Invalid amount"
+                                amount.toDoubleOrNull()!! <= 0 -> "Amount must be greater than 0"
+                                amount.toDoubleOrNull()!! > remainingDue -> "Cannot exceed remaining due"
+                                else -> null
+                            }
+                            errorText?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        }
+                    },
+                    prefix = { if (amount.isNotEmpty()) Text("FCFA ") }
                 )
 
-                // Payment method selection (simplified)
-                Text("Payment Method:", style = MaterialTheme.typography.bodySmall)
-                // Add your payment method selection UI here
+                // Payment method selection
+                Text(
+                    "Payment Method:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
 
+                // Payment method chips
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TransactionBroker.entries.forEach { broker ->
+                        val isSelected = broker == selectedBroker
+
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { selectedBroker = broker },
+                            label = { Text(broker.name) },
+                            leadingIcon = if (isSelected) {
+                                {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(FilterChipDefaults.IconSize)
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                true,
+                                isSelected,
+                                borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                selectedBorderColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+
+                // Payment method info card
+                if (selectedBroker != TransactionBroker.CASHIER) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = selectedBroker.name,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
+                    val amountValue = amount.toDoubleOrNull() ?: payment.amount
                     val updatedPayment = payment.copy(
-                        amount = amount.toDoubleOrNull() ?: payment.amount,
+                        amount = amountValue,
                         transactionBroker = selectedBroker,
-                        //
-                        // isModified = true
                     )
                     onUpdatePayment(updatedPayment)
                     onDismiss()
-                }
+                },
+                enabled = !isAmountError && amount.isNotBlank()
             ) {
                 Text("Update Payment")
             }
@@ -1153,6 +1349,7 @@ fun EditPaymentDialog(
         }
     )
 }
+
 @Composable
 private fun PaymentHeader(due: Double) {
     Card(
