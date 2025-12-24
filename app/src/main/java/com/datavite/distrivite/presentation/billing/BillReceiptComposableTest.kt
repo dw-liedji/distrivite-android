@@ -77,7 +77,17 @@ fun BillReceiptComposableWithHeader(billing: DomainBilling) {
 
         // ---------- BILL INFORMATION (Compact) ----------
         CompactInfoRow(label = "Bill #:", value = billing.billNumber)
-        CompactInfoRow(label = "Date:", value = SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault()).format(Date()))
+        CompactInfoRow(label = "Date:", value = try {
+            val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+            val date = parser.parse(billing.created.substringBefore("."))
+            if (date != null) {
+                SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault()).format(date)
+            } else {
+                "N/A"
+            }
+        } catch (e: Exception) {
+            "N/A"
+        })
         CompactInfoRow(label = "Client:", value = billing.customerName)
         CompactInfoRow(label = "Téléphone:", value = billing.customerPhoneNumber ?:"")
 
