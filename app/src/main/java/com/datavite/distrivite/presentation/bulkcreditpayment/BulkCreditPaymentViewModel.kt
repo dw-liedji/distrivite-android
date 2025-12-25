@@ -197,6 +197,8 @@ class BulkCreditPaymentViewModel @Inject constructor(
                 unselectBulkCreditPayment()
                 bulkCreditPaymentRepository.deleteBulkCreditPayment(bulkCreditPayment)
                 showInfoMessage("Bulk credit payment deleted successfully")
+                // Sync with server
+                authOrgUser.value?.let { syncOrchestrator.push(it.orgSlug) }
             } catch (e: Exception) {
                 showErrorMessage("Failed to delete bulk credit payment: ${e.message}")
             }

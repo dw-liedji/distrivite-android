@@ -320,7 +320,7 @@ fun BulkCreditPaymentCard(
                 contentDescription = buildString {
                     append("Bulk credit payment. ")
                     append("Amount: ${bulkCreditPayment.amount} FCFA. ")
-                    append("Customer ID: ${bulkCreditPayment.customerId}. ")
+                    append("Client: ${bulkCreditPayment.customerName}. ")
                     append("Sync status: ${bulkCreditPayment.syncStatus}. ")
                     append("Date: ${bulkCreditPayment.created.substring(0, 10)}")
                 }
@@ -440,7 +440,7 @@ fun BulkCreditPaymentCard(
 
                     // Agent/User
                     Text(
-                        text = "Agent: ${bulkCreditPayment.orgUserId.take(8)}",
+                        text = "Commercial: ${bulkCreditPayment.orgUserName}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         maxLines = 1
