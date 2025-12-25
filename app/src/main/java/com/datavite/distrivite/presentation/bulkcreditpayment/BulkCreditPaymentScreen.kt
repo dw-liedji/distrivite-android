@@ -199,7 +199,7 @@ fun BulkCreditPaymentScreen(
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Filter chips for quick filtering
                         if (bulkCreditPaymentUiState.bulkCreditPayments.isNotEmpty()) {
-                            FlowRow(
+                            /*FlowRow(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
@@ -213,7 +213,7 @@ fun BulkCreditPaymentScreen(
                                     label = { Text("All Customers") }
                                 )
                                 // Add more filter chips as needed
-                            }
+                            }*/
                         }
 
                         // Bulk Credit Payments List
@@ -371,7 +371,7 @@ fun BulkCreditPaymentCard(
                 ) {
                     // Customer ID with proper overflow handling
                     Text(
-                        text = "Customer: ${bulkCreditPayment.customerId.take(12)}...",
+                        text = "${bulkCreditPayment.customerName.take(16)}...",
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -440,7 +440,7 @@ fun BulkCreditPaymentCard(
 
                     // Agent/User
                     Text(
-                        text = "Commercial: ${bulkCreditPayment.orgUserName}",
+                        text = bulkCreditPayment.orgUserName,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         maxLines = 1
