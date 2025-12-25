@@ -7,9 +7,11 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class EntityType (val fetchOrder: Int) {
     @SerialName("attendance")
-    Attendance(fetchOrder = 6),
+    Attendance(fetchOrder = 7),
     @SerialName("session")
-    Session(fetchOrder = 5),
+    Session(fetchOrder = 6),
+    @SerialName("BulkCreditPayment")
+    BulkCreditPayment(fetchOrder = 5),
     @SerialName("customer")
     Customer(fetchOrder = 4),
     @SerialName("transaction")

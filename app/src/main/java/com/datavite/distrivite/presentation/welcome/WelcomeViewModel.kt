@@ -43,7 +43,7 @@ class WelcomeViewModel @Inject constructor(
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             authUserFlow
                 .collectLatest {
                 authOrgUser -> if (authOrgUser != null) {
@@ -82,7 +82,7 @@ class WelcomeViewModel @Inject constructor(
     }
 
     fun signIn() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             withContext(Dispatchers.IO){
 
                 _authenticationState.value = AuthenticationState.Loading

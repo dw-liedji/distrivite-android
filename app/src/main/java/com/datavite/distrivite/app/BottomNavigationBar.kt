@@ -2,10 +2,12 @@ package com.datavite.distrivite.app
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Difference
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Difference
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Badge
@@ -18,11 +20,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.BillingScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.BulkCreditPaymentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.CloudScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.ShoppingScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.TransactionScreenDestination
 import com.ramcosta.composedestinations.navigation.DestinationsNavigator
 import com.ramcosta.composedestinations.spec.DirectionDestinationSpec
+
 
 enum class BottomNavigationBarItem(
     val direction: DirectionDestinationSpec,
@@ -50,6 +54,12 @@ enum class BottomNavigationBarItem(
         unselectedIcon = Icons.Outlined.AttachMoney,
         hasNews = true
     ),
+    RecoverCredit(direction = BulkCreditPaymentScreenDestination,
+        title = "Recv",
+        selectedIcon = Icons.Filled.CreditCard,          // Changed
+        unselectedIcon = Icons.Outlined.CreditCard,      // Changed
+        hasNews = true
+    ),
     Cloud(direction = CloudScreenDestination,
         title = "Cloud",
         selectedIcon = Icons.Filled.Cloud,
@@ -57,6 +67,7 @@ enum class BottomNavigationBarItem(
         hasNews = true
     ),
 }
+
 @Composable
 fun BottomNavigationBar(route: String, destinationsNavigator: DestinationsNavigator) {
     NavigationBar {
@@ -106,3 +117,6 @@ fun BottomNavigationBar(route: String, destinationsNavigator: DestinationsNaviga
         }
     }
 }
+
+
+

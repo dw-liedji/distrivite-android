@@ -488,7 +488,7 @@ fun TransactionCard(
 }
 
 @Composable
-private fun SyncStatusTag(syncStatus: SyncStatus) {
+fun SyncStatusTag(syncStatus: SyncStatus) {
     val (text, color, backgroundColor) = when (syncStatus) {
         SyncStatus.PENDING -> Triple(
             "En attente",

@@ -71,7 +71,7 @@ class BillingViewModel @Inject constructor(
     }
 
     private fun observeLocalBillingsData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             billingRepository.getDomainBillingsFlow()
                 .catch { it.printStackTrace() }
                 .collect { loadBillings(it) }
@@ -79,7 +79,7 @@ class BillingViewModel @Inject constructor(
     }
 
     private fun observeLocalStocksData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             stockRepository.getDomainStocksFlow()
                 .catch { it.printStackTrace() }
                 .collect { loadStocks(it) }
@@ -87,7 +87,7 @@ class BillingViewModel @Inject constructor(
     }
 
     fun syncLocalDataWithServer(organization: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 _billingUiState.update { it.copy(isLoading = true) }
                 syncOrchestrator.push(organization)

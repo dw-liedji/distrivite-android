@@ -13,6 +13,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.datavite.distrivite.presentation.billing.BillingScreen
 import com.datavite.distrivite.presentation.billing.BillingViewModel
+import com.datavite.distrivite.presentation.bulkcreditpayment.BulkCreditPaymentScreen
+import com.datavite.distrivite.presentation.bulkcreditpayment.BulkCreditPaymentViewModel
 import com.datavite.distrivite.presentation.shopping.ShoppingScreen
 import com.datavite.distrivite.presentation.shopping.ShoppingViewModel
 import com.datavite.distrivite.presentation.transaction.TransactionScreen
@@ -21,6 +23,7 @@ import com.ramcosta.composedestinations.DestinationsNavHost
 import com.ramcosta.composedestinations.generated.NavGraphs
 import com.ramcosta.composedestinations.generated.destinations.ShoppingScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.BillingScreenDestination
+import com.ramcosta.composedestinations.generated.destinations.BulkCreditPaymentScreenDestination
 import com.ramcosta.composedestinations.generated.destinations.TransactionScreenDestination
 import com.ramcosta.composedestinations.manualcomposablecalls.composable
 
@@ -46,6 +49,7 @@ fun AppRootScreen(
         val shoppingViewModel: ShoppingViewModel = hiltViewModel()
         val billingViewModel: BillingViewModel = hiltViewModel()
         val transactionViewModel: TransactionViewModel = hiltViewModel()
+        val bulkCreditPaymentViewModel: BulkCreditPaymentViewModel = hiltViewModel()
 
         DestinationsNavHost(
             modifier = Modifier
@@ -75,6 +79,12 @@ fun AppRootScreen(
                 TransactionScreen(
                     navigator = this.destinationsNavigator,
                     viewModel = transactionViewModel // Pass the shared ViewModel
+                )
+            }
+            composable(BulkCreditPaymentScreenDestination) {
+                BulkCreditPaymentScreen(
+                    navigator = this.destinationsNavigator,
+                    viewModel = bulkCreditPaymentViewModel // Pass the shared ViewModel
                 )
             }
             /*

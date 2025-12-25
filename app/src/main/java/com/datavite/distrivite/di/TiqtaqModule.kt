@@ -14,6 +14,7 @@ import com.datavite.distrivite.data.local.dao.EmployeeDao
 import com.datavite.distrivite.data.local.dao.HolidayDao
 import com.datavite.distrivite.data.local.dao.LeaveDao
 import com.datavite.distrivite.data.local.dao.LocalBillingDao
+import com.datavite.distrivite.data.local.dao.LocalBulkCreditPaymentDao
 import com.datavite.distrivite.data.local.dao.LocalCustomerDao
 import com.datavite.distrivite.data.local.dao.LocalInstructorContractDao
 import com.datavite.distrivite.data.local.dao.LocalStockDao
@@ -31,6 +32,8 @@ import com.datavite.distrivite.data.local.dao.TeachingPeriodDao
 import com.datavite.distrivite.data.local.dao.WorkingPeriodDao
 import com.datavite.distrivite.data.local.datasource.BillingLocalDataSource
 import com.datavite.distrivite.data.local.datasource.BillingLocalDataSourceImpl
+import com.datavite.distrivite.data.local.datasource.BulkCreditPaymentLocalDataSource
+import com.datavite.distrivite.data.local.datasource.BulkCreditPaymentLocalDataSourceImpl
 import com.datavite.distrivite.data.local.datasource.ClaimLocalDataSource
 import com.datavite.distrivite.data.local.datasource.ClaimLocalDataSourceImpl
 import com.datavite.distrivite.data.local.datasource.CustomerLocalDataSource
@@ -70,6 +73,7 @@ import com.datavite.distrivite.data.location.geofence.GeofenceRepository
 import com.datavite.distrivite.data.mapper.BillingItemMapper
 import com.datavite.distrivite.data.mapper.BillingMapper
 import com.datavite.distrivite.data.mapper.BillingPaymentMapper
+import com.datavite.distrivite.data.mapper.BulkCreditPaymentMapper
 import com.datavite.distrivite.data.mapper.ClaimMapper
 import com.datavite.distrivite.data.mapper.CustomerMapper
 import com.datavite.distrivite.data.mapper.EmployeeMapper
@@ -98,6 +102,8 @@ import com.datavite.distrivite.data.remote.clients.PrivateRetrofitClient
 import com.datavite.distrivite.data.remote.clients.PublicRetrofitClient
 import com.datavite.distrivite.data.remote.datasource.BillingRemoteDataSource
 import com.datavite.distrivite.data.remote.datasource.BillingRemoteDataSourceImpl
+import com.datavite.distrivite.data.remote.datasource.BulkCreditPaymentRemoteDataSource
+import com.datavite.distrivite.data.remote.datasource.BulkCreditPaymentRemoteDataSourceImpl
 import com.datavite.distrivite.data.remote.datasource.ClaimRemoteDataSource
 import com.datavite.distrivite.data.remote.datasource.ClaimRemoteDataSourceImpl
 import com.datavite.distrivite.data.remote.datasource.CustomerRemoteDataSource
@@ -136,6 +142,7 @@ import com.datavite.distrivite.data.remote.service.HolidayService
 import com.datavite.distrivite.data.remote.service.LeaveService
 import com.datavite.distrivite.data.remote.service.OrganizationUserService
 import com.datavite.distrivite.data.remote.service.RemoteBillingService
+import com.datavite.distrivite.data.remote.service.RemoteBulkCreditPaymentService
 import com.datavite.distrivite.data.remote.service.RemoteCustomerService
 import com.datavite.distrivite.data.remote.service.RemoteInstructorContractService
 import com.datavite.distrivite.data.remote.service.RemoteStockService
@@ -148,6 +155,7 @@ import com.datavite.distrivite.data.remote.service.StudentAttendanceService
 import com.datavite.distrivite.data.remote.service.TeachingPeriodService
 import com.datavite.distrivite.data.remote.service.WorkingPeriodService
 import com.datavite.distrivite.data.repository.BillingRepositoryImpl
+import com.datavite.distrivite.data.repository.BulkCreditPaymentRepositoryImpl
 import com.datavite.distrivite.data.repository.ClaimRepositoryImpl
 import com.datavite.distrivite.data.repository.CustomerRepositoryImpl
 import com.datavite.distrivite.data.repository.EmployeeRepositoryImpl
@@ -170,6 +178,8 @@ import com.datavite.distrivite.data.sync.SyncOrchestrator
 import com.datavite.distrivite.data.sync.SyncService
 import com.datavite.distrivite.data.sync.services.BillingSyncService
 import com.datavite.distrivite.data.sync.services.BillingSyncServiceImpl
+import com.datavite.distrivite.data.sync.services.BulkCreditPaymentSyncService
+import com.datavite.distrivite.data.sync.services.BulkCreditPaymentSyncServiceImpl
 import com.datavite.distrivite.data.sync.services.CustomerSyncService
 import com.datavite.distrivite.data.sync.services.CustomerSyncServiceImpl
 import com.datavite.distrivite.data.sync.services.StockSyncService
@@ -182,6 +192,7 @@ import com.datavite.distrivite.data.sync.services.TransactionSyncService
 import com.datavite.distrivite.data.sync.services.TransactionSyncServiceImpl
 import com.datavite.distrivite.domain.notification.NotificationBus
 import com.datavite.distrivite.domain.repository.BillingRepository
+import com.datavite.distrivite.domain.repository.BulkCreditPaymentRepository
 import com.datavite.distrivite.domain.repository.ClaimRepository
 import com.datavite.distrivite.domain.repository.CustomerRepository
 import com.datavite.distrivite.domain.repository.EmployeeRepository
@@ -904,6 +915,7 @@ object TiqtaqModule {
         stockSyncService: StockSyncService,
         customerSyncService: CustomerSyncService,
         transactionSyncService: TransactionSyncService,
+        bulkCreditPaymentSyncService: BulkCreditPaymentSyncService,
         billingSyncService: BillingSyncService,
         teachingSessionSyncService: TeachingSessionSyncService,
         studentAttendanceSyncService: StudentAttendanceSyncService
@@ -913,7 +925,8 @@ object TiqtaqModule {
             customerSyncService, // first in syncing order
             stockSyncService, // second in syncing order
             billingSyncService, // third in syncing order
-            transactionSyncService, // fourth in syncing order
+            bulkCreditPaymentSyncService, // fourth in syncing order
+            transactionSyncService, // fifth in syncing order
             //teachingSessionSyncService,  // five in syncing order
             //studentAttendanceSyncService // sixth in syncing order
         )
@@ -1383,6 +1396,84 @@ object TiqtaqModule {
             remoteDataSource = remoteDataSource,
             localDataSource = localDataSource,
             customerMapper = customerMapper,
+            syncMetadataDao = syncMetadataDao,
+            pendingOperationDao = pendingOperationDao,
+        )
+    }
+
+
+    // In your Dagger/Hilt module (likely a DataModule or NetworkModule)
+
+    @Provides
+    @Singleton
+    fun provideLocalBulkCreditPaymentDao(database: AppDatabase): LocalBulkCreditPaymentDao {
+        return database.localBulkCreditPaymentDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideRemoteBulkCreditPaymentService(
+        privateRetrofitClient: PrivateRetrofitClient
+    ): RemoteBulkCreditPaymentService {
+        return privateRetrofitClient.getRetrofit(BuildConfig.BASE_URL)
+            .create(RemoteBulkCreditPaymentService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBulkCreditPaymentLocalDataSource(
+        localBulkCreditPaymentDao: LocalBulkCreditPaymentDao
+    ): BulkCreditPaymentLocalDataSource {
+        return BulkCreditPaymentLocalDataSourceImpl(localBulkCreditPaymentDao)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBulkCreditPaymentRemoteDataSource(
+        remoteBulkCreditPaymentService: RemoteBulkCreditPaymentService,
+    ): BulkCreditPaymentRemoteDataSource {
+        return BulkCreditPaymentRemoteDataSourceImpl(remoteBulkCreditPaymentService)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBulkCreditPaymentMapper(): BulkCreditPaymentMapper {
+        return BulkCreditPaymentMapper()
+    }
+
+    @Provides
+    @Singleton
+    fun provideBulkCreditPaymentRepository(
+        remoteDataSource: BulkCreditPaymentRemoteDataSource,
+        localDataSource: BulkCreditPaymentLocalDataSource,
+        bulkCreditPaymentMapper: BulkCreditPaymentMapper,
+        pendingOperationDao: PendingOperationDao,
+        pendingNotificationDao: PendingNotificationDao,
+        notificationBus: NotificationBus
+    ): BulkCreditPaymentRepository {
+        return BulkCreditPaymentRepositoryImpl(
+            localDataSource = localDataSource,
+            remoteDataSource = remoteDataSource,
+            bulkCreditPaymentMapper = bulkCreditPaymentMapper,
+            pendingOperationDao = pendingOperationDao,
+            pendingNotificationDao = pendingNotificationDao,
+            notificationBus = notificationBus
+        )
+    }
+
+    @Provides
+    @Singleton
+    fun provideBulkCreditPaymentSyncService(
+        remoteDataSource: BulkCreditPaymentRemoteDataSource,
+        localDataSource: BulkCreditPaymentLocalDataSource,
+        bulkCreditPaymentMapper: BulkCreditPaymentMapper,
+        syncMetadataDao: SyncMetadataDao,
+        pendingOperationDao: PendingOperationDao,
+    ): BulkCreditPaymentSyncService {
+        return BulkCreditPaymentSyncServiceImpl(
+            remoteDataSource = remoteDataSource,
+            localDataSource = localDataSource,
+            bulkCreditPaymentMapper = bulkCreditPaymentMapper,
             syncMetadataDao = syncMetadataDao,
             pendingOperationDao = pendingOperationDao,
         )

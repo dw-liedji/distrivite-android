@@ -9,6 +9,7 @@ import com.datavite.distrivite.data.local.dao.HolidayDao
 import com.datavite.distrivite.data.local.dao.LeaveDao
 import com.datavite.distrivite.data.local.dao.LocalBillingDao
 import com.datavite.distrivite.data.local.dao.LocalBillingItemDao
+import com.datavite.distrivite.data.local.dao.LocalBulkCreditPaymentDao
 import com.datavite.distrivite.data.local.dao.LocalCustomerDao
 import com.datavite.distrivite.data.local.dao.LocalInstructorContractDao
 import com.datavite.distrivite.data.local.dao.LocalStockDao
@@ -27,6 +28,7 @@ import com.datavite.distrivite.data.local.dao.WorkingPeriodDao
 import com.datavite.distrivite.data.local.model.LocalBilling
 import com.datavite.distrivite.data.local.model.LocalBillingItem
 import com.datavite.distrivite.data.local.model.LocalBillingPayment
+import com.datavite.distrivite.data.local.model.LocalBulkCreditPayment
 import com.datavite.distrivite.data.local.model.LocalClaim
 import com.datavite.distrivite.data.local.model.LocalCustomer
 import com.datavite.distrivite.data.local.model.LocalEmployee
@@ -70,6 +72,7 @@ import com.datavite.distrivite.data.local.model.SyncMetadata
     LocalBillingItem::class,
     LocalBillingPayment::class,
     LocalTransaction::class,
+    LocalBulkCreditPayment::class,
      ],
     version = 1,
     exportSchema = false
@@ -99,6 +102,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun localStockDao(): LocalStockDao
     abstract fun localCustomerDao(): LocalCustomerDao
     abstract fun localTransactionDao(): LocalTransactionDao
+    abstract fun localBulkCreditPaymentDao(): LocalBulkCreditPaymentDao
     abstract fun localBillingDao(): LocalBillingDao
     abstract fun localBillingItemDao(): LocalBillingItemDao
     abstract fun syncMetadataDao(): SyncMetadataDao  // Add this

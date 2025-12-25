@@ -100,7 +100,7 @@ class ShoppingViewModel @Inject constructor(
     }
 
     private fun observeLocalStocksData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             stockRepository.getDomainStocksFlow()
                 .catch { it.printStackTrace() }
                 .collect { loadStocks(it) }
@@ -108,7 +108,7 @@ class ShoppingViewModel @Inject constructor(
     }
 
     fun syncLocalDataWithServer(organization: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 _shoppingUiState.update { it.copy(isLoading = true) }
                 syncOrchestrator.push(organization)
@@ -437,7 +437,7 @@ class ShoppingViewModel @Inject constructor(
 
     // Enhanced confirmOrder to include payment
     fun confirmOrder() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _shoppingUiState.update { it.copy(isConfirming = true) }
             try {
                 authOrgUser.value?.let { authOrgUser ->
@@ -529,7 +529,7 @@ class ShoppingViewModel @Inject constructor(
 
     // NEW: Observe customers from repository
     private fun observeLocalCustomersData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             customerRepository.getDomainCustomersFlow()
                 .catch { e ->
                     Log.e("ShoppingViewModel", "Error observing customers", e)
@@ -676,7 +676,7 @@ class ShoppingViewModel @Inject constructor(
     }
 
     private fun observeNotificationBus(){
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             notificationBus.events.collect { event ->
                 _notificationState.value = event
                 textToSpeechNotifier.speak(event)
@@ -687,7 +687,7 @@ class ShoppingViewModel @Inject constructor(
     }
 
      fun observePendingOperations() {
-         viewModelScope.launch {
+         viewModelScope.launch(Dispatchers.IO) {
              authOrgUserCredentialManager.sharedAuthOrgUserFlow.collectLatest {
                  authOrgUser ->
                  pendingOperationDao.getAllPendingOperationsFlow().collect {
@@ -717,7 +717,7 @@ class ShoppingViewModel @Inject constructor(
     }
 
     private fun pushLocalChanges(organization:String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
 
             try {
                 // Mettre à jour l'état de synchronisation

@@ -57,7 +57,7 @@ class TransactionViewModel @Inject constructor(
     }
 
     private fun observeLocalTransactionsData() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             transactionRepository.getDomainTransactionsFlow()
                 .catch { e ->
                     _transactionUiState.update { it.copy(errorMessage = "Failed to load transactions: ${e.message}") }
@@ -73,7 +73,7 @@ class TransactionViewModel @Inject constructor(
     // -------------------------
 
     fun syncLocalDataWithServer(organization: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 _transactionUiState.update { it.copy(isLoading = true) }
                 syncOrchestrator.push(organization)
@@ -99,7 +99,7 @@ class TransactionViewModel @Inject constructor(
     // -------------------------
 
     fun createTransaction() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 val amount = _transactionUiState.value.transactionAmount.toDoubleOrNull()
                 if (amount == null || amount <= 0) {
@@ -149,7 +149,7 @@ class TransactionViewModel @Inject constructor(
     }
 
     fun deleteTransaction(transaction: DomainTransaction) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
                 transactionRepository.deleteTransaction(transaction)
                 showInfoMessage("Transaction deleted successfully")
