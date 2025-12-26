@@ -65,9 +65,9 @@ class CustomerRepositoryImpl @Inject constructor(
         try {
             localDataSource.insertLocalCustomer(local)
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Customer created successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Customer created successfully"))
         }catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Another domainCustomer with the same period already exists"))
+            //notificationBus.emit(NotificationEvent.Failure("Another domainCustomer with the same period already exists"))
         }
 
     }

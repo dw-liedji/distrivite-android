@@ -74,9 +74,9 @@ class StockRepositoryImpl @Inject constructor(
         try {
             localDataSource.insertLocalStock(local)
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Stock quantity updated successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Stock quantity updated successfully"))
         }catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Stock failed to update"))
+            //notificationBus.emit(NotificationEvent.Failure("Stock failed to update"))
         }
     }
 
@@ -103,9 +103,9 @@ class StockRepositoryImpl @Inject constructor(
         try {
             localDataSource.insertLocalStock(local)
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Stock created successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Stock created successfully"))
         }catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Another domainStock with the same period already exists"))
+            //notificationBus.emit(NotificationEvent.Failure("Another domainStock with the same period already exists"))
         }
 
     }

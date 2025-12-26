@@ -230,11 +230,11 @@ class TransactionViewModel @Inject constructor(
 
     fun showInfoMessage(message: String) {
         _transactionUiState.update { it.copy(infoMessage = message) }
-        textToSpeechNotifier.speak(NotificationEvent.Success(message))
+        //textToSpeechNotifier.speak(NotificationEvent.Success(message))
     }
 
     fun showErrorMessage(message: String) {
         _transactionUiState.update { it.copy(errorMessage = message) }
-        textToSpeechNotifier.speak(NotificationEvent.Failure(message))
+        //textToSpeechNotifier.speak(NotificationEvent.Failure(message))
     }
 }

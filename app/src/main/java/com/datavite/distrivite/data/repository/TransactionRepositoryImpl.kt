@@ -67,9 +67,9 @@ class TransactionRepositoryImpl @Inject constructor(
         try {
             localDataSource.insertLocalTransaction(local)
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Transaction created successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Transaction created successfully"))
         } catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Another transaction with the same ID already exists"))
+            //notificationBus.emit(NotificationEvent.Failure("Another transaction with the same ID already exists"))
         }
     }
 

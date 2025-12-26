@@ -679,8 +679,8 @@ class ShoppingViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             notificationBus.events.collect { event ->
                 _notificationState.value = event
-                textToSpeechNotifier.speak(event)
-                delay(6000)
+                //textToSpeechNotifier.speak(event)
+                //delay(1000)
                 clearNotification()
             }
         }

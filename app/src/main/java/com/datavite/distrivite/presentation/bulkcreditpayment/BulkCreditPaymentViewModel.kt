@@ -320,12 +320,12 @@ class BulkCreditPaymentViewModel @Inject constructor(
 
     fun showInfoMessage(message: String) {
         _bulkCreditPaymentUiState.update { it.copy(infoMessage = message) }
-        textToSpeechNotifier.speak(NotificationEvent.Success(message))
+        //textToSpeechNotifier.speak(NotificationEvent.Success(message))
     }
 
     fun showErrorMessage(message: String) {
         _bulkCreditPaymentUiState.update { it.copy(errorMessage = message) }
-        textToSpeechNotifier.speak(NotificationEvent.Failure(message))
+        //textToSpeechNotifier.speak(NotificationEvent.Failure(message))
     }
 
     fun getBulkCreditPaymentsByCustomerId(customerId: String) {

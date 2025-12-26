@@ -65,9 +65,9 @@ class BulkCreditPaymentRepositoryImpl @Inject constructor(
         try {
             localDataSource.insertLocalBulkCreditPayment(local)
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Bulk credit payment created successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Bulk credit payment created successfully"))
         } catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Another bulk credit payment with the same ID already exists"))
+            // notificationBus.emit(NotificationEvent.Failure("Another bulk credit payment with the same ID already exists"))
         }
     }
 
@@ -88,7 +88,7 @@ class BulkCreditPaymentRepositoryImpl @Inject constructor(
 
         localDataSource.insertLocalBulkCreditPayment(local)
         pendingOperationDao.upsertPendingOperation(operation)
-        notificationBus.emit(NotificationEvent.Success("Bulk credit payment updated successfully"))
+        //notificationBus.emit(NotificationEvent.Success("Bulk credit payment updated successfully"))
     }
 
     override suspend fun deleteBulkCreditPayment(domainBulkCreditPayment: DomainBulkCreditPayment) {

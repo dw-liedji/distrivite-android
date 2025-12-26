@@ -80,9 +80,9 @@ class BillingRepositoryImpl @Inject constructor(
             // Save pending operation for syncing
             // Assuming you have pendingOperationDao inserted in the constructor if needed
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Billing created successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Billing created successfully"))
         } catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
+            //notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
         }
     }
 
@@ -117,9 +117,9 @@ class BillingRepositoryImpl @Inject constructor(
             // Save pending operation for syncing
             // Assuming you have pendingOperationDao inserted in the constructor if needed
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Billing created successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Billing created successfully"))
         } catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
+            //notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
         }
     }
 
@@ -158,9 +158,9 @@ class BillingRepositoryImpl @Inject constructor(
             // Save pending operation for syncing
             // Assuming you have pendingOperationDao inserted in the constructor if needed
             pendingOperationDao.upsertPendingOperation(operation)
-            notificationBus.emit(NotificationEvent.Success("Order delivered successfully"))
+            //notificationBus.emit(NotificationEvent.Success("Order delivered successfully"))
         } catch (e: SQLiteConstraintException) {
-            notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
+            //notificationBus.emit(NotificationEvent.Failure("Billing with the same ID already exists"))
         }
     }
 
